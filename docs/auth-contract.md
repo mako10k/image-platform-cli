@@ -1,6 +1,7 @@
 # Invite-only CLI authentication contract
 
-Status: candidate; owner acceptance required before implementation or external configuration.
+Status: accepted for local implementation on 2026-08-20; external configuration and live effects
+remain separately gated.
 
 ## Decision
 
@@ -99,10 +100,15 @@ must not silently fall back to staging.
 - Secret-redaction tests cover normal, verbose, error, signal, and crash paths.
 - One separately approved staging invitation and one bounded live login/API/logout sequence.
 
+## Implementation decision
+
+- Python 3.12 packaged with `uv`; console command `image`.
+- Standard-library `argparse` for the command surface, `httpx` for bounded HTTP, `PyJWT` with
+  cryptography for JWT/JWKS verification, and `keyring` for OS credential storage.
+- Linux, macOS, and Windows are supported only when `keyring` reports a usable non-failing backend.
+  Headless systems without such a backend fail closed.
+
 ## Deferred decisions
 
-- Implementation language and packaging.
-- Supported OS credential-store backends.
 - Whether PKCE loopback fallback is needed after Device Flow usability testing.
 - Production invitation ownership, organization policy, support recovery, and audit retention.
-
