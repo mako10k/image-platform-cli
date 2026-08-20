@@ -32,3 +32,14 @@ class StoredCredential:
     subject: str
     organization_id: str
     scopes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedImage:
+    data: bytes = field(repr=False)
+    mime_type: str
+    sha256: str
+    width: int
+    height: int
+    model_id: str
+    model_revision: str

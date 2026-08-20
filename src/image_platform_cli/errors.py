@@ -8,3 +8,7 @@ class AuthenticationError(CliError):
 
 class CredentialStoreError(CliError):
     """The OS credential store is unavailable or failed."""
+
+
+class ApiError(CliError):
+    """The public image API failed or returned an invalid response."""

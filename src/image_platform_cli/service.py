@@ -2,6 +2,7 @@ from collections.abc import Callable
 
 from .config import Config
 from .credentials import CredentialStore
+from .errors import AuthenticationError
 from .models import StoredCredential
 from .oauth import DeviceFlowClient
 from .tokens import TokenValidator
@@ -50,3 +51,22 @@ class AuthService:
 
     def logout(self) -> bool:
         return self._store.delete(self._config.credential_account)
+
+    def access_token(self, required_scopes: frozenset[str]) -> str:
+        current = self._store.load(self._config.credential_account)
+        if current is None:
+            raise AuthenticationError("not logged in")
+        tokens = self._flow.refresh(current.refresh_token, current.scopes)
+        verified = self._validator.validate(
+            tokens.access_token,
+            organization_id=self._config.organization_id,
+            required_scopes=required_scopes,
+        )
+        replacement = StoredCredential(
+            refresh_token=tokens.refresh_token,
+            subject=verified.subject,
+            organization_id=verified.organization_id,
+            scopes=tuple(sorted(verified.scopes)),
+        )
+        self._store.save(self._config.credential_account, replacement)
+        return tokens.access_token

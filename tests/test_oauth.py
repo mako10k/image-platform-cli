@@ -103,3 +103,27 @@ def test_device_authorization_rejects_non_https_verification_uri() -> None:
             flow.authorize(("openid",))
     finally:
         http.close()
+
+
+def test_refresh_sends_current_scopes_and_returns_rotated_token() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(item.split("=", 1) for item in request.content.decode().split("&")))
+        return httpx.Response(
+            200,
+            json={"access_token": "new-access", "refresh_token": "new-refresh"},
+            request=request,
+        )
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    flow = DeviceFlowClient(http, "https://issuer.example", "public-client")
+    try:
+        tokens = flow.refresh("old-refresh", ("openid", "images:generate"))
+    finally:
+        http.close()
+
+    assert tokens.refresh_token == "new-refresh"
+    assert seen["grant_type"] == "refresh_token"
+    assert "organization_id" not in seen
+    assert seen["scope"] == "openid+images%3Agenerate"

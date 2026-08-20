@@ -25,6 +25,11 @@ class FakeFlow:
         assert authorization.device_code == "device"
         return self.token_set
 
+    def refresh(self, refresh_token: str, scopes: tuple[str, ...]) -> TokenSet:
+        assert refresh_token
+        assert scopes
+        return self.token_set
+
 
 @dataclass
 class FakeValidator:
@@ -107,3 +112,32 @@ def test_logout_removes_local_credential() -> None:
     )
     assert service.logout() is True
     assert service.logout() is False
+
+
+def test_refresh_rotation_occurs_only_after_new_access_token_validation() -> None:
+    old = StoredCredential("old-refresh", "user_1", "org_1", ("images:generate",))
+    store = MemoryStore()
+    store.value = old
+    verified = VerifiedToken(
+        "user_1", "org_1", frozenset({"images:generate"}), 2_000_000_000, "session_1"
+    )
+    service = AuthService(
+        config(), FakeFlow(TokenSet("access-secret", "new-refresh")), FakeValidator(verified), store
+    )
+
+    assert service.access_token(frozenset({"images:generate"})) == "access-secret"
+    assert store.value is not None
+    assert store.value.refresh_token == "new-refresh"
+
+
+def test_failed_refreshed_token_validation_preserves_old_refresh_token() -> None:
+    old = StoredCredential("old-refresh", "user_1", "org_1", ("images:generate",))
+    store = MemoryStore()
+    store.value = old
+    service = AuthService(
+        config(), FakeFlow(TokenSet("access-secret", "new-refresh")), FakeValidator(None), store
+    )
+
+    with pytest.raises(AuthenticationError):
+        service.access_token(frozenset({"images:generate"}))
+    assert store.value == old

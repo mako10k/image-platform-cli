@@ -80,6 +80,32 @@ class DeviceFlowClient:
             raise AuthenticationError("token endpoint rejected the request")
         raise AuthenticationError("device authorization expired")
 
+    def refresh(self, refresh_token: str, scopes: tuple[str, ...]) -> TokenSet:
+        try:
+            response = self._http.post(
+                f"{self._issuer}/oauth2/token",
+                data={
+                    "client_id": self._client_id,
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "scope": " ".join(scopes),
+                },
+            )
+        except httpx.HTTPError as error:
+            raise AuthenticationError("token refresh failed") from error
+        body = _json_object(response)
+        if response.is_success:
+            try:
+                return TokenSet(
+                    access_token=_required_string(body, "access_token"),
+                    refresh_token=_optional_string(body, "refresh_token") or refresh_token,
+                )
+            except (ValueError, TypeError, KeyError) as error:
+                raise AuthenticationError("refresh response was malformed") from error
+        if body.get("error") == "invalid_grant":
+            raise AuthenticationError("login session is no longer valid")
+        raise AuthenticationError("token refresh was rejected")
+
 
 def _json_object(response: httpx.Response) -> dict[str, Any]:
     try:
@@ -93,6 +119,15 @@ def _json_object(response: httpx.Response) -> dict[str, Any]:
 
 def _required_string(body: Any, name: str) -> str:
     value = body[name]
+    if not isinstance(value, str) or not value:
+        raise ValueError(name)
+    return value
+
+
+def _optional_string(body: Any, name: str) -> str | None:
+    value = body.get(name)
+    if value is None:
+        return None
     if not isinstance(value, str) or not value:
         raise ValueError(name)
     return value

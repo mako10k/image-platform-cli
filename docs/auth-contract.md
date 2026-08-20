@@ -54,8 +54,9 @@ user requests. Read-only identity commands must not request image mutation scope
 - On timeout, HTTP 429, or 5xx, retain the current credential and retry with bounded exponential
   backoff while the access token remains valid.
 - On terminal `invalid_grant`, remove the unusable local credential and require login again.
-- Organization switching is explicit. It must request a refreshed token for the selected
-  organization and validate the resulting `org_id` before replacing current state.
+- Organization switching is explicit and requires a new Connect authorization/consent flow for
+  the selected organization. Refresh does not select an organization; every refreshed token must
+  retain the configured `org_id` or be rejected before replacing current state.
 
 ## `image logout`
 
