@@ -46,3 +46,17 @@ replaced with `principal_3812d29dbabcc2fa721fafa72cb938b1`, computed through the
 corrected Modal Secret update and hydration readback both returned
 `st-l96G2LmFPa3TnHbYFDtgX2`. The exhausted generation was not retried; another live request requires
 a new explicit authorization.
+
+The owner authorized one additional request with the same prompt and parameters. Before sending,
+the output path was absent and the active web container had started after the corrected Secret
+update. That single request succeeded without retry and saved
+`/home/katsumata-m/image-platform-cli/staging-e2e.png`.
+
+- Image: PNG, 256 by 256, RGB, non-interlaced, 39,410 bytes.
+- SHA-256: `0ebb5ea6991ceac8d7e9299adafb7f1127a2295932d01e11538a03804e41e62b`.
+- Model: `black-forest-labs/FLUX.2-klein-4B`.
+- Model revision: `e7b7dc27f91deacad38e78976d1f2b499d76a294`.
+- Local credential readback retained the expected user, organization, and `images:generate` scope.
+
+The generated image remains a local untracked result artifact; it is not part of the repository or
+any remote publication.
