@@ -16,8 +16,20 @@ invitation was sent once with a seven-day expiry; no retry, resend, or revoke wa
 Independent email-and-organization-filtered list reads returned exactly those pending invitation
 records. Invitation tokens and acceptance URLs were not printed or stored.
 
-The environment-wide `Sign up` toggle remains unverified because WorkOS exposes that control in
-the Dashboard Authentication settings rather than the documented public API. Live CLI login and
-image generation remain unexecuted. After invitation acceptance, the resulting WorkOS `user_*`
-subject must be added to the image platform generation allowlist through a separately inspected and
-authorized Modal configuration update before live generation can succeed.
+The owner reported disabling the environment-wide `Sign up` toggle in the Dashboard. WorkOS does
+not expose a documented public read API for that toggle, so this remains owner-observed rather than
+independently read back.
+
+`katsumata-m@t-axis.co.jp` accepted its invitation, verified its email, and has active organization
+membership. Its subject is `user_01M0FJANJM34EKGFPRRDXRG6FP`. The second invitation remains pending;
+its user record exists but the email is unverified and it has no organization membership.
+
+The accepted subject was appended to the existing generation allowlist without removing its prior
+principal. Local secret metadata reported two unique principals. Modal Secret
+`image-platform-composite-policy` was updated in place and hydrated as
+`st-l96G2LmFPa3TnHbYFDtgX2`; the deployed App was not redeployed.
+
+Installed CLI Device Flow login then completed for the accepted subject and expected organization.
+Credential-store readback reported scopes `email images:generate offline_access openid profile`.
+No access or refresh token was printed or stored in the repository. Live image generation remains
+unexecuted because its prompt, single-inference ceiling, and cost authorization are a separate gate.
