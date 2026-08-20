@@ -31,5 +31,18 @@ principal. Local secret metadata reported two unique principals. Modal Secret
 
 Installed CLI Device Flow login then completed for the accepted subject and expected organization.
 Credential-store readback reported scopes `email images:generate offline_access openid profile`.
-No access or refresh token was printed or stored in the repository. Live image generation remains
-unexecuted because its prompt, single-inference ceiling, and cost authorization are a separate gate.
+No access or refresh token was printed or stored in the repository. At that checkpoint, live image
+generation remained separately gated by its prompt, single-inference ceiling, and cost authorization.
+
+The owner subsequently authorized one 256 by 256 generation with seed zero. The CLI refreshed its
+session and sent exactly one generation request; it returned HTTP 422 with request ID
+`bc1e9bc8-f217-455a-817b-fa2675a97e93`. No output file was created and no automatic retry occurred.
+
+Diagnosis found that the generation policy compares `Principal.id`, an opaque digest derived from
+issuer, subject, and organization, rather than the raw WorkOS `user_*` subject. The dimensions were
+within the registered generation profile limits. The raw subject was removed from the allowlist and
+replaced with `principal_3812d29dbabcc2fa721fafa72cb938b1`, computed through the API's own
+`_opaque_id` implementation. The resulting local allowlist contains two unique principals, and the
+corrected Modal Secret update and hydration readback both returned
+`st-l96G2LmFPa3TnHbYFDtgX2`. The exhausted generation was not retried; another live request requires
+a new explicit authorization.
