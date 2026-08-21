@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 import webbrowser
 from collections.abc import Sequence
@@ -40,7 +41,52 @@ def parser() -> argparse.ArgumentParser:
     optimize.add_argument("--width", type=int)
     optimize.add_argument("--height", type=int)
     optimize.add_argument("--seed", type=int)
+    job = groups.add_parser("job")
+    job_commands = job.add_subparsers(dest="command", required=True)
+    job_list = job_commands.add_parser("list")
+    job_list.add_argument("--status", action="append", default=[])
+    job_list.add_argument("--operation", action="append", default=[])
+    _add_collection_arguments(job_list)
+    job_show = job_commands.add_parser("show")
+    job_show.add_argument("job_id")
+    job_show.add_argument("--json", action="store_true")
+    job_cancel = job_commands.add_parser("cancel")
+    job_cancel.add_argument("job_id")
+    job_cancel.add_argument("--json", action="store_true")
+    job_previews = job_commands.add_parser("previews")
+    job_previews.add_argument("job_id")
+    job_previews.add_argument("--json", action="store_true")
+    artifact = groups.add_parser("artifact")
+    artifact_commands = artifact.add_subparsers(dest="command", required=True)
+    artifact_list = artifact_commands.add_parser("list")
+    artifact_list.add_argument("--state", action="append", default=[])
+    artifact_list.add_argument("--kind", action="append", default=[])
+    artifact_list.add_argument("--namespace")
+    _add_collection_arguments(artifact_list)
+    artifact_show = artifact_commands.add_parser("show")
+    artifact_show.add_argument("artifact_id")
+    artifact_show.add_argument("--json", action="store_true")
+    artifact_download = artifact_commands.add_parser("download")
+    artifact_download.add_argument("artifact_id")
+    artifact_download.add_argument("--output", "-o", type=Path, required=True)
+    search = groups.add_parser("search")
+    search.add_argument("query")
+    search.add_argument("--namespace", default="default")
+    search.add_argument("--mime-type", action="append", default=[])
+    search.add_argument("--created-after")
+    search.add_argument("--limit", type=int, default=20)
+    search.add_argument("--json", action="store_true")
     return root
+
+
+def _add_collection_arguments(command: argparse.ArgumentParser) -> None:
+    command.add_argument("--created-after")
+    command.add_argument("--created-before")
+    command.add_argument("--page-size", type=int, default=20)
+    command.add_argument("--cursor")
+    command.add_argument("--all", dest="all_pages", action="store_true")
+    command.add_argument("--max-items", type=int)
+    command.add_argument("--json", action="store_true")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -83,6 +129,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                     seed=args.seed,
                 )
                 print(optimized)
+            elif args.group == "job":
+                _run_job_command(args, service, ImageApiClient(http, config.api_base_url))
+            elif args.group == "artifact":
+                _run_artifact_command(args, service, ImageApiClient(http, config.api_base_url))
+            elif args.group == "search":
+                access_token = service.access_token(frozenset({"artifacts:read"}))
+                result = ImageApiClient(http, config.api_base_url).search(
+                    access_token,
+                    query=args.query,
+                    namespace=args.namespace,
+                    mime_types=args.mime_type,
+                    created_after=args.created_after,
+                    limit=args.limit,
+                )
+                _emit(result, args.json)
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(
@@ -114,6 +175,73 @@ def main(argv: Sequence[str] | None = None) -> int:
     except CliError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
+
+
+def _run_job_command(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    if args.command == "cancel":
+        token = service.access_token(frozenset({"jobs:cancel"}))
+        _emit(api.cancel_job(token, args.job_id), args.json)
+        return
+    token = service.access_token(frozenset({"campaigns:read"}))
+    if args.command == "list":
+        max_items = _pagination_limit(args)
+        result = api.list_jobs(
+            token,
+            statuses=args.status,
+            operations=args.operation,
+            created_after=args.created_after,
+            created_before=args.created_before,
+            cursor=args.cursor,
+            page_size=args.page_size,
+            max_items=max_items,
+        )
+    elif args.command == "show":
+        result = api.get_job(token, args.job_id)
+    else:
+        result = api.get_job_previews(token, args.job_id)
+    _emit(result, args.json)
+
+
+def _run_artifact_command(
+    args: argparse.Namespace, service: AuthService, api: ImageApiClient
+) -> None:
+    token = service.access_token(frozenset({"artifacts:read"}))
+    if args.command == "list":
+        result = api.list_artifacts(
+            token,
+            states=args.state,
+            kinds=args.kind,
+            namespace=args.namespace,
+            created_after=args.created_after,
+            created_before=args.created_before,
+            cursor=args.cursor,
+            page_size=args.page_size,
+            max_items=_pagination_limit(args),
+        )
+        _emit(result, args.json)
+    elif args.command == "show":
+        _emit(api.get_artifact(token, args.artifact_id), args.json)
+    else:
+        result = api.download_artifact(token, args.artifact_id, args.output)
+        artifact = result.get("result", {}).get("artifact", {})
+        print(f"Saved Artifact {args.artifact_id} to {args.output}.")
+        if isinstance(artifact, dict) and isinstance(artifact.get("sha256"), str):
+            print(f"SHA-256: {artifact['sha256']}")
+
+
+def _pagination_limit(args: argparse.Namespace) -> int | None:
+    if args.all_pages and args.max_items is None:
+        raise CliError("--all requires --max-items")
+    if not args.all_pages and args.max_items is not None:
+        raise CliError("--max-items requires --all")
+    return int(args.max_items) if args.max_items is not None else None
+
+
+def _emit(value: object, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(value, sort_keys=True, separators=(",", ":")))
+    else:
+        print(json.dumps(value, indent=2, sort_keys=True))
 
 
 def _announce(user_code: str, verification_uri_complete: str) -> None:

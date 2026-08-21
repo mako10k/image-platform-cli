@@ -280,3 +280,122 @@ def test_output_conflict_is_rejected_by_preflight_before_generation(tmp_path: Pa
         require_available_output(output)
 
     assert output.read_bytes() == b"existing"
+
+
+def test_job_inventory_follows_cursor_only_with_bounded_maximum() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        cursor = request.url.params.get("cursor")
+        if cursor is None:
+            return httpx.Response(
+                200,
+                json={
+                    "data": [{"job_id": "job_2", "prompt": "secret"}],
+                    "next_cursor": "opaque-cursor",
+                    "has_more": True,
+                },
+                request=request,
+            )
+        assert cursor == "opaque-cursor"
+        return httpx.Response(
+            200,
+            json={"data": [{"job_id": "job_1"}], "next_cursor": None, "has_more": False},
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").list_jobs(
+            "access-secret", statuses=["completed"], page_size=1, max_items=2
+        )
+
+    assert result == {
+        "data": [{"job_id": "job_2"}, {"job_id": "job_1"}],
+        "next_cursor": None,
+        "has_more": False,
+    }
+    assert len(requests) == 2
+    assert requests[0].url.params.get_list("status") == ["completed"]
+
+
+def test_artifact_show_removes_signed_url_and_private_fields() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "artifact_id": "art_1",
+                "object_key": "private/key",
+                "result": {
+                    "url": "https://objects.example/signed",
+                    "artifact": {"sha256": "a" * 64, "prompt": "private prompt"},
+                },
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").get_artifact(
+            "access-secret", "art_1"
+        )
+
+    assert result == {"artifact_id": "art_1", "result": {"artifact": {"sha256": "a" * 64}}}
+
+
+def test_artifact_download_preflights_and_does_not_forward_oauth(tmp_path: Path) -> None:
+    data = png_header(256, 256)
+    output = tmp_path / "artifact.png"
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.host == "api.example":
+            assert request.headers["Authorization"] == "Bearer access-secret"
+            return httpx.Response(200, json=artifact(data), request=request)
+        assert request.url == "https://objects.example/signed-result"
+        assert "Authorization" not in request.headers
+        return httpx.Response(
+            200, content=data, headers={"Content-Type": "image/png"}, request=request
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").download_artifact(
+            "access-secret", "art_generation01", output
+        )
+
+    assert output.read_bytes() == data
+    assert "url" not in result["result"]
+    assert len(requests) == 2
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as http,
+        pytest.raises(ApiError, match="already exists"),
+    ):
+        ImageApiClient(http, "https://api.example").download_artifact(
+            "access-secret", "art_generation01", output
+        )
+    assert len(requests) == 2
+
+
+def test_artifact_download_rejects_integrity_mismatch_without_output(tmp_path: Path) -> None:
+    data = png_header(256, 256)
+    output = tmp_path / "artifact.png"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.example":
+            body = artifact(data)
+            body["result"]["artifact"]["sha256"] = "0" * 64  # type: ignore[index]
+            return httpx.Response(200, json=body, request=request)
+        return httpx.Response(
+            200, content=data, headers={"Content-Type": "image/png"}, request=request
+        )
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as http,
+        pytest.raises(ApiError, match="integrity check failed"),
+    ):
+        ImageApiClient(http, "https://api.example").download_artifact(
+            "access-secret", "art_generation01", output
+        )
+    assert not output.exists()

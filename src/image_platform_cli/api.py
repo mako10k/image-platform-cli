@@ -3,9 +3,9 @@ import os
 import re
 import secrets
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urljoin, urlsplit
 from uuid import uuid4
 
@@ -15,6 +15,12 @@ from .errors import ApiError
 from .models import GeneratedImage
 
 TERMINAL_FAILURES = frozenset({"failed", "partial", "cancelled"})
+MAX_PAGE_SIZE = 100
+MAX_ARTIFACT_DOWNLOAD_BYTES = 100 * 1024 * 1024
+_SENSITIVE_RESPONSE_KEYS = frozenset(
+    {"url", "signed_url", "object_key", "staging_key", "prompt", "query", "upload"}
+)
+QueryValue = str | int | float | bool | None
 
 
 class ImageApiClient:
@@ -33,6 +39,195 @@ class ImageApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def list_jobs(
+        self,
+        access_token: str,
+        *,
+        statuses: Sequence[str] = (),
+        operations: Sequence[str] = (),
+        created_after: str | None = None,
+        created_before: str | None = None,
+        cursor: str | None = None,
+        page_size: int = 20,
+        max_items: int | None = None,
+    ) -> dict[str, Any]:
+        params = _collection_params(
+            page_size,
+            cursor,
+            ("status", statuses),
+            ("operation", operations),
+            ("created_after", created_after),
+            ("created_before", created_before),
+        )
+        return self._collect("/v1/jobs", access_token, params, max_items)
+
+    def get_job(self, access_token: str, job_id: str) -> dict[str, Any]:
+        return self._safe_json("GET", f"/v1/jobs/{_resource_id(job_id)}", access_token)
+
+    def cancel_job(self, access_token: str, job_id: str) -> dict[str, Any]:
+        return self._safe_json("POST", f"/v1/jobs/{_resource_id(job_id)}/cancel", access_token)
+
+    def get_job_previews(self, access_token: str, job_id: str) -> dict[str, Any]:
+        return self._safe_json("GET", f"/v1/jobs/{_resource_id(job_id)}/previews", access_token)
+
+    def list_artifacts(
+        self,
+        access_token: str,
+        *,
+        states: Sequence[str] = (),
+        kinds: Sequence[str] = (),
+        namespace: str | None = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        cursor: str | None = None,
+        page_size: int = 20,
+        max_items: int | None = None,
+    ) -> dict[str, Any]:
+        params = _collection_params(
+            page_size,
+            cursor,
+            ("state", states),
+            ("kind", kinds),
+            ("namespace", namespace),
+            ("created_after", created_after),
+            ("created_before", created_before),
+        )
+        return self._collect("/v1/artifacts", access_token, params, max_items)
+
+    def get_artifact(self, access_token: str, artifact_id: str) -> dict[str, Any]:
+        body = self._request_json("GET", f"/v1/artifacts/{_resource_id(artifact_id)}", access_token)
+        return cast(dict[str, Any], _safe_projection(body))
+
+    def download_artifact(self, access_token: str, artifact_id: str, output: Path) -> dict[str, Any]:
+        require_available_output(output)
+        body = self._request_json("GET", f"/v1/artifacts/{_resource_id(artifact_id)}", access_token)
+        result = _required_dict(body.get("result"))
+        metadata = _required_dict(result.get("artifact"))
+        declared_size = _required_int(metadata, "size_bytes")
+        if declared_size > MAX_ARTIFACT_DOWNLOAD_BYTES:
+            raise ApiError("Artifact exceeds the download size limit")
+        url = _required_string(result, "url")
+        if urlsplit(url).scheme != "https":
+            raise ApiError("image API returned an unsafe Artifact URL")
+        try:
+            response = self._http.get(url)
+        except httpx.HTTPError as error:
+            raise ApiError("Artifact download failed") from error
+        if not response.is_success:
+            raise ApiError(_safe_api_error(response))
+        data = response.content
+        _verify_artifact(data, response.headers.get("Content-Type"), metadata)
+        _save_bytes_exclusive(data, output)
+        return cast(dict[str, Any], _safe_projection(body))
+
+    def search(
+        self,
+        access_token: str,
+        *,
+        query: str,
+        namespace: str = "default",
+        mime_types: Sequence[str] = (),
+        created_after: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        if not query.strip() or len(query) > 2048:
+            raise ApiError("search query must contain 1 to 2048 non-whitespace characters")
+        if limit < 1 or limit > 100:
+            raise ApiError("limit must be from 1 through 100")
+        filters: dict[str, object] = {"mime_type": list(mime_types)}
+        if created_after is not None:
+            filters["created_after"] = created_after
+        return self._safe_json(
+            "POST",
+            "/v1/search",
+            access_token,
+            json={"query": query, "namespace": namespace, "filters": filters, "limit": limit},
+        )
+
+    def _collect(
+        self,
+        path: str,
+        access_token: str,
+        params: list[tuple[str, QueryValue]],
+        max_items: int | None,
+    ) -> dict[str, Any]:
+        if max_items is not None and max_items < 1:
+            raise ApiError("max-items must be greater than zero")
+        collected: list[Any] = []
+        next_cursor: str | None = None
+        while True:
+            page_params: list[tuple[str, QueryValue]] = [
+                (key, value) for key, value in params if key != "cursor"
+            ]
+            if max_items is not None:
+                remaining = max_items - len(collected)
+                page_params = [
+                    (key, min(cast(int, value), remaining) if key == "limit" else value)
+                    for key, value in page_params
+                ]
+            if next_cursor is not None:
+                page_params.append(("cursor", next_cursor))
+            elif not collected:
+                page_params.extend((key, value) for key, value in params if key == "cursor")
+            page = self._request_json("GET", path, access_token, params=page_params)
+            data = page.get("data")
+            if not isinstance(data, list):
+                raise ApiError("image API returned a malformed collection")
+            collected.extend(data)
+            next_value = page.get("next_cursor")
+            if next_value is not None and not isinstance(next_value, str):
+                raise ApiError("image API returned a malformed collection")
+            next_cursor = next_value
+            if max_items is None or next_cursor is None or len(collected) >= max_items:
+                break
+        if max_items is not None:
+            collected = collected[:max_items]
+        return cast(
+            dict[str, Any],
+            _safe_projection(
+                {"data": collected, "next_cursor": next_cursor, "has_more": next_cursor is not None}
+            ),
+        )
+
+    def _safe_json(
+        self,
+        method: str,
+        path: str,
+        access_token: str,
+        *,
+        json: Mapping[str, object] | None = None,
+    ) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            _safe_projection(self._request_json(method, path, access_token, json=json)),
+        )
+
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        access_token: str,
+        *,
+        params: Sequence[tuple[str, str | int | float | bool | None]] = (),
+        json: Mapping[str, object] | None = None,
+    ) -> dict[str, Any]:
+        try:
+            response = self._http.request(
+                method,
+                f"{self._api_base_url}{path}",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params=list(params),
+                json=json,
+            )
+        except httpx.HTTPError as error:
+            raise ApiError("image API request failed") from error
+        if not response.is_success:
+            raise ApiError(_safe_api_error(response))
+        try:
+            return _required_dict(response.json())
+        except ValueError as error:
+            raise ApiError("image API returned a malformed response") from error
 
     def optimize_prompt(
         self,
@@ -249,6 +444,98 @@ def require_available_output(output: Path) -> None:
         raise ApiError("output directory does not exist")
     if output.exists():
         raise ApiError("output file already exists")
+
+
+def _save_bytes_exclusive(data: bytes, output: Path) -> None:
+    temporary = output.with_name(f".{output.name}.{secrets.token_hex(8)}.part")
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, output)
+        except FileExistsError as error:
+            raise ApiError("output file already exists") from error
+        except OSError as error:
+            raise ApiError("output file could not be written") from error
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _verify_artifact(
+    data: bytes, response_content_type: str | None, metadata: dict[str, Any]
+) -> None:
+    expected_sha = _required_string(metadata, "sha256")
+    expected_size = _required_int(metadata, "size_bytes")
+    expected_mime = _required_string(metadata, "mime_type")
+    actual_content_type = response_content_type.split(";", 1)[0].strip() if response_content_type else None
+    if (
+        not data
+        or hashlib.sha256(data).hexdigest() != expected_sha
+        or len(data) != expected_size
+        or actual_content_type != expected_mime
+    ):
+        raise ApiError("Artifact download integrity check failed")
+    width = metadata.get("width")
+    height = metadata.get("height")
+    if width is None and height is None:
+        return
+    if not isinstance(width, int) or not isinstance(height, int) or isinstance(width, bool):
+        raise ApiError("image API returned malformed Artifact metadata")
+    if expected_mime == "image/png":
+        dimensions = _png_dimensions(data)
+    else:
+        raise ApiError("Artifact image MIME type cannot be verified")
+    if dimensions != (width, height):
+        raise ApiError("Artifact download integrity check failed")
+
+
+def _safe_projection(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _safe_projection(item)
+            for key, item in value.items()
+            if isinstance(key, str) and key.lower() not in _SENSITIVE_RESPONSE_KEYS
+        }
+    if isinstance(value, list):
+        return [_safe_projection(item) for item in value]
+    return value
+
+
+def _collection_params(
+    page_size: int,
+    cursor: str | None,
+    *values: tuple[str, object],
+) -> list[tuple[str, QueryValue]]:
+    if page_size < 1 or page_size > MAX_PAGE_SIZE:
+        raise ApiError(f"page-size must be from 1 through {MAX_PAGE_SIZE}")
+    params: list[tuple[str, QueryValue]] = [("limit", page_size)]
+    if cursor is not None:
+        params.append(("cursor", cursor))
+    for key, value in values:
+        if value is None:
+            continue
+        if isinstance(value, str):
+            params.append((key, value))
+        elif isinstance(value, Sequence):
+            if not all(isinstance(item, (str, int, float, bool)) for item in value):
+                raise ApiError(f"{key} contains an invalid value")
+            params.extend((key, cast(str | int | float | bool, item)) for item in value)
+        else:
+            if not isinstance(value, (int, float, bool)):
+                raise ApiError(f"{key} is invalid")
+            params.append((key, value))
+    return params
+
+
+def _resource_id(value: str) -> str:
+    if not value or not re.fullmatch(r"[A-Za-z0-9_-]{1,255}", value):
+        raise ApiError("resource ID is invalid")
+    return value
 
 
 def _png_dimensions(data: bytes) -> tuple[int, int]:
