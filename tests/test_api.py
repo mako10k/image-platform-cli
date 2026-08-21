@@ -351,6 +351,37 @@ def test_artifact_show_removes_signed_url_and_private_fields() -> None:
     assert result == {"artifact_id": "art_1", "result": {"artifact": {"sha256": "a" * 64}}}
 
 
+def test_job_show_removes_entire_nested_prompt_plan() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "job_id": "job_1",
+                "status": "completed",
+                "steps": [
+                    {
+                        "id": "generate",
+                        "status": "completed",
+                        "value_outputs": {
+                            "seed": 42,
+                            "prompt_plan": {
+                                "intent": {"subject": "must remain secret"},
+                                "negative_prompt": "also secret",
+                            },
+                        },
+                    }
+                ],
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").get_job("access-secret", "job_1")
+
+    assert result["steps"][0]["value_outputs"] == {"seed": 42}
+    assert "secret" not in str(result)
+
+
 def test_artifact_download_preflights_and_does_not_forward_oauth(tmp_path: Path) -> None:
     data = valid_png(256, 256)
     output = tmp_path / "artifact.png"

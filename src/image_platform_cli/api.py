@@ -20,7 +20,7 @@ TERMINAL_FAILURES = frozenset({"failed", "partial", "cancelled"})
 MAX_PAGE_SIZE = 100
 MAX_ARTIFACT_DOWNLOAD_BYTES = 100 * 1024 * 1024
 _SENSITIVE_RESPONSE_KEYS = frozenset(
-    {"url", "signed_url", "object_key", "staging_key", "prompt", "query", "upload"}
+    {"url", "signed_url", "object_key", "staging_key", "query", "upload"}
 )
 QueryValue = str | int | float | bool | None
 
@@ -511,11 +511,16 @@ def _safe_projection(value: Any) -> Any:
         return {
             key: _safe_projection(item)
             for key, item in value.items()
-            if isinstance(key, str) and key.lower() not in _SENSITIVE_RESPONSE_KEYS
+            if isinstance(key, str) and not _sensitive_response_key(key)
         }
     if isinstance(value, list):
         return [_safe_projection(item) for item in value]
     return value
+
+
+def _sensitive_response_key(key: str) -> bool:
+    normalized = key.lower()
+    return normalized in _SENSITIVE_RESPONSE_KEYS or "prompt" in normalized
 
 
 def _collection_params(
