@@ -4,6 +4,7 @@ import re
 import secrets
 import time
 from collections.abc import Callable, Mapping, Sequence
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
@@ -17,6 +18,7 @@ from .errors import ApiError
 from .models import GeneratedImage
 
 TERMINAL_FAILURES = frozenset({"failed", "partial", "cancelled"})
+TERMINAL_CAMPAIGN_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
 MAX_PAGE_SIZE = 100
 MAX_ARTIFACT_DOWNLOAD_BYTES = 100 * 1024 * 1024
 _SENSITIVE_RESPONSE_KEYS = frozenset(
@@ -101,7 +103,9 @@ class ImageApiClient:
         body = self._request_json("GET", f"/v1/artifacts/{_resource_id(artifact_id)}", access_token)
         return cast(dict[str, Any], _safe_projection(body))
 
-    def download_artifact(self, access_token: str, artifact_id: str, output: Path) -> dict[str, Any]:
+    def download_artifact(
+        self, access_token: str, artifact_id: str, output: Path
+    ) -> dict[str, Any]:
         require_available_output(output)
         body = self._request_json("GET", f"/v1/artifacts/{_resource_id(artifact_id)}", access_token)
         result = _required_dict(body.get("result"))
@@ -146,6 +150,96 @@ class ImageApiClient:
             access_token,
             json={"query": query, "namespace": namespace, "filters": filters, "limit": limit},
         )
+
+    def create_batch_plan(
+        self,
+        access_token: str,
+        *,
+        intent: str,
+        width: int = 1024,
+        height: int = 1024,
+        candidate_count: int = 1,
+        root_seed: int | None = None,
+        optimize: bool = True,
+    ) -> dict[str, Any]:
+        seed = _resolve_seed(root_seed)
+        self._validate_batch_plan(intent, width, height, candidate_count, seed)
+        body = self._request_json(
+            "POST",
+            "/v1/batch-plans",
+            access_token,
+            headers={"Idempotency-Key": str(uuid4())},
+            json={
+                "intent": intent,
+                "profile": "generation-standard",
+                "width": width,
+                "height": height,
+                "candidate_count": candidate_count,
+                "root_seed": seed,
+                "optimize": optimize,
+            },
+        )
+        return _batch_plan_projection(body, expected_seed=seed, expected_count=candidate_count)
+
+    def create_campaign(
+        self,
+        access_token: str,
+        *,
+        plan_id: str,
+        max_cost_usd: Decimal | str,
+        allow_partial: bool = False,
+        wait_seconds: int = 0,
+        allow_long_wait: bool = False,
+    ) -> dict[str, Any]:
+        maximum = _positive_decimal(max_cost_usd, "max-cost")
+        _validate_wait(wait_seconds, allow_long_wait)
+        campaign = self._safe_json(
+            "POST",
+            "/v1/campaigns",
+            access_token,
+            headers={"Idempotency-Key": str(uuid4())},
+            json={
+                "plan_id": _resource_id(plan_id),
+                "max_cost_usd": str(maximum),
+                "allow_partial": allow_partial,
+            },
+        )
+        campaign_id = _required_string(campaign, "campaign_id")
+        if wait_seconds == 0 or _required_string(campaign, "status") in TERMINAL_CAMPAIGN_STATUSES:
+            return campaign
+        deadline = self._clock() + wait_seconds
+        while self._clock() < deadline:
+            self._sleep(min(1.0, max(0.0, deadline - self._clock())))
+            campaign = self.get_campaign(access_token, campaign_id)
+            if _required_string(campaign, "status") in TERMINAL_CAMPAIGN_STATUSES:
+                break
+        return campaign
+
+    def get_campaign(self, access_token: str, campaign_id: str) -> dict[str, Any]:
+        return self._safe_json("GET", f"/v1/campaigns/{_resource_id(campaign_id)}", access_token)
+
+    def cancel_campaign(self, access_token: str, campaign_id: str) -> dict[str, Any]:
+        return self._safe_json(
+            "POST", f"/v1/campaigns/{_resource_id(campaign_id)}/cancel", access_token
+        )
+
+    def campaign_results(self, access_token: str, campaign_id: str) -> dict[str, Any]:
+        campaign = self.get_campaign(access_token, campaign_id)
+        child_ids = campaign.get("child_job_ids")
+        if not isinstance(child_ids, list) or not all(isinstance(item, str) for item in child_ids):
+            raise ApiError("image API returned a malformed Campaign")
+        jobs = [self.get_job(access_token, child_id) for child_id in child_ids]
+        artifacts: list[dict[str, str]] = []
+        for job in jobs:
+            outputs = job.get("outputs", [])
+            if not isinstance(outputs, list):
+                raise ApiError("image API returned a malformed Campaign result")
+            for output in outputs:
+                artifact_id = _required_string(_required_dict(output), "artifact_id")
+                artifacts.append(
+                    {"job_id": _required_string(job, "job_id"), "artifact_id": artifact_id}
+                )
+        return {"campaign": campaign, "jobs": jobs, "artifacts": artifacts}
 
     def _collect(
         self,
@@ -198,11 +292,14 @@ class ImageApiClient:
         path: str,
         access_token: str,
         *,
+        headers: Mapping[str, str] | None = None,
         json: Mapping[str, object] | None = None,
     ) -> dict[str, Any]:
         return cast(
             dict[str, Any],
-            _safe_projection(self._request_json(method, path, access_token, json=json)),
+            _safe_projection(
+                self._request_json(method, path, access_token, headers=headers, json=json)
+            ),
         )
 
     def _request_json(
@@ -211,6 +308,7 @@ class ImageApiClient:
         path: str,
         access_token: str,
         *,
+        headers: Mapping[str, str] | None = None,
         params: Sequence[tuple[str, str | int | float | bool | None]] = (),
         json: Mapping[str, object] | None = None,
     ) -> dict[str, Any]:
@@ -218,7 +316,7 @@ class ImageApiClient:
             response = self._http.request(
                 method,
                 f"{self._api_base_url}{path}",
-                headers={"Authorization": f"Bearer {access_token}"},
+                headers={"Authorization": f"Bearer {access_token}", **(headers or {})},
                 params=list(params),
                 json=json,
             )
@@ -421,6 +519,20 @@ class ImageApiClient:
         if wait_seconds > 60 and not allow_long_wait:
             raise ApiError("wait above 60 seconds requires --allow-long-wait")
 
+    @staticmethod
+    def _validate_batch_plan(
+        intent: str, width: int, height: int, candidate_count: int, root_seed: int
+    ) -> None:
+        if not intent.strip() or len(intent) > 2048:
+            raise ApiError("intent must contain 1 to 2048 non-whitespace characters")
+        for name, value in (("width", width), ("height", height)):
+            if value < 256 or value > 1024 or value % 64:
+                raise ApiError(f"{name} must be a multiple of 64 from 256 through 1024")
+        if isinstance(candidate_count, bool) or candidate_count < 1 or candidate_count > 16:
+            raise ApiError("count must be from 1 through 16")
+        if root_seed < 0 or root_seed > 2**63 - 1:
+            raise ApiError("seed is outside the supported range")
+
 
 def save_image(image: GeneratedImage, output: Path) -> None:
     require_available_output(output)
@@ -474,7 +586,9 @@ def _verify_artifact(
     expected_sha = _required_string(metadata, "sha256")
     expected_size = _required_int(metadata, "size_bytes")
     expected_mime = _required_string(metadata, "mime_type")
-    actual_content_type = response_content_type.split(";", 1)[0].strip() if response_content_type else None
+    actual_content_type = (
+        response_content_type.split(";", 1)[0].strip() if response_content_type else None
+    )
     if (
         not data
         or hashlib.sha256(data).hexdigest() != expected_sha
@@ -516,6 +630,54 @@ def _safe_projection(value: Any) -> Any:
     if isinstance(value, list):
         return [_safe_projection(item) for item in value]
     return value
+
+
+def _batch_plan_projection(
+    body: dict[str, Any], *, expected_seed: int, expected_count: int
+) -> dict[str, Any]:
+    items = body.get("items")
+    if not isinstance(items, list) or len(items) != expected_count:
+        raise ApiError("image API returned a malformed BatchPlan")
+    projected_items: list[dict[str, object]] = []
+    for item in items:
+        record = _required_dict(item)
+        projected_items.append(
+            {
+                "index": _required_int(record, "index"),
+                "prompt": _required_string(record, "prompt"),
+                "seed": _required_int(record, "seed"),
+            }
+        )
+    if _required_int(body, "root_seed") != expected_seed:
+        raise ApiError("image API returned an unexpected root seed")
+    return {
+        "plan_id": _required_string(body, "plan_id"),
+        "created_at": _required_string(body, "created_at"),
+        "profile": _required_string(body, "profile"),
+        "model_revision": _required_string(body, "model_revision"),
+        "width": _required_int(body, "width"),
+        "height": _required_int(body, "height"),
+        "root_seed": expected_seed,
+        "items": projected_items,
+        "estimated_cost_usd": _required_string(body, "estimated_cost_usd"),
+    }
+
+
+def _positive_decimal(value: Decimal | str, name: str) -> Decimal:
+    try:
+        parsed = value if isinstance(value, Decimal) else Decimal(value)
+    except (InvalidOperation, ValueError) as error:
+        raise ApiError(f"{name} must be a positive decimal") from error
+    if not parsed.is_finite() or parsed <= 0:
+        raise ApiError(f"{name} must be a positive decimal")
+    return parsed
+
+
+def _validate_wait(wait_seconds: int, allow_long_wait: bool) -> None:
+    if isinstance(wait_seconds, bool) or wait_seconds < 0 or wait_seconds > 120:
+        raise ApiError("wait must be an integer from 0 through 120 seconds")
+    if wait_seconds > 60 and not allow_long_wait:
+        raise ApiError("wait above 60 seconds requires --allow-long-wait")
 
 
 def _sensitive_response_key(key: str) -> bool:

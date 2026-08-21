@@ -3,6 +3,7 @@ import json
 import sys
 import webbrowser
 from collections.abc import Sequence
+from decimal import Decimal
 from pathlib import Path
 
 import httpx
@@ -14,6 +15,16 @@ from .errors import CliError
 from .oauth import DeviceFlowClient
 from .service import AuthService
 from .tokens import TokenValidator
+
+DEFAULT_LOGIN_SCOPES = (
+    "images:generate",
+    "campaigns:read",
+    "artifacts:read",
+    "batches:plan",
+    "batches:execute",
+    "campaigns:write",
+    "jobs:cancel",
+)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -76,6 +87,27 @@ def parser() -> argparse.ArgumentParser:
     search.add_argument("--created-after")
     search.add_argument("--limit", type=int, default=20)
     search.add_argument("--json", action="store_true")
+    batch = groups.add_parser("batch")
+    batch_commands = batch.add_subparsers(dest="command", required=True)
+    batch_plan = batch_commands.add_parser("plan")
+    batch_plan.add_argument("intent")
+    batch_plan.add_argument("--width", type=int, default=1024)
+    batch_plan.add_argument("--height", type=int, default=1024)
+    batch_plan.add_argument("--count", type=int, default=1)
+    batch_plan.add_argument("--seed", type=int)
+    batch_plan.add_argument("--no-optimize", action="store_true")
+    batch_plan.add_argument("--json", action="store_true")
+    batch_run = batch_commands.add_parser("run")
+    batch_run.add_argument("plan_id")
+    batch_run.add_argument("--max-cost", type=Decimal, required=True)
+    batch_run.add_argument("--allow-partial", action="store_true")
+    batch_run.add_argument("--wait", type=int, default=0)
+    batch_run.add_argument("--allow-long-wait", action="store_true")
+    batch_run.add_argument("--json", action="store_true")
+    for command in ("status", "cancel", "results"):
+        parser_ = batch_commands.add_parser(command)
+        parser_.add_argument("campaign_id")
+        parser_.add_argument("--json", action="store_true")
     return root
 
 
@@ -144,17 +176,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     limit=args.limit,
                 )
                 _emit(result, args.json)
+            elif args.group == "batch":
+                _run_batch_command(args, service, ImageApiClient(http, config.api_base_url))
             elif args.command == "login":
                 login_credential = service.login(
-                    tuple(
-                        args.scope
-                        or [
-                            "images:generate",
-                            "campaigns:read",
-                            "artifacts:read",
-                            "batches:plan",
-                        ]
-                    ),
+                    tuple(args.scope or DEFAULT_LOGIN_SCOPES),
                     _announce,
                 )
                 print(
@@ -227,6 +253,42 @@ def _run_artifact_command(
         print(f"Saved Artifact {args.artifact_id} to {args.output}.")
         if isinstance(artifact, dict) and isinstance(artifact.get("sha256"), str):
             print(f"SHA-256: {artifact['sha256']}")
+
+
+def _run_batch_command(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    if args.command == "plan":
+        token = service.access_token(frozenset({"batches:plan"}))
+        result = api.create_batch_plan(
+            token,
+            intent=args.intent,
+            width=args.width,
+            height=args.height,
+            candidate_count=args.count,
+            root_seed=args.seed,
+            optimize=not args.no_optimize,
+        )
+    elif args.command == "run":
+        token = service.access_token(
+            frozenset({"batches:execute", "campaigns:write", "campaigns:read"})
+        )
+        result = api.create_campaign(
+            token,
+            plan_id=args.plan_id,
+            max_cost_usd=args.max_cost,
+            allow_partial=args.allow_partial,
+            wait_seconds=args.wait,
+            allow_long_wait=args.allow_long_wait,
+        )
+    elif args.command == "cancel":
+        token = service.access_token(frozenset({"jobs:cancel"}))
+        result = api.cancel_campaign(token, args.campaign_id)
+    elif args.command == "results":
+        token = service.access_token(frozenset({"campaigns:read"}))
+        result = api.campaign_results(token, args.campaign_id)
+    else:
+        token = service.access_token(frozenset({"campaigns:read"}))
+        result = api.get_campaign(token, args.campaign_id)
+    _emit(result, args.json)
 
 
 def _pagination_limit(args: argparse.Namespace) -> int | None:

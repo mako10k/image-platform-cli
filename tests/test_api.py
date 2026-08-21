@@ -1,4 +1,5 @@
 import hashlib
+from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 
@@ -344,9 +345,7 @@ def test_artifact_show_removes_signed_url_and_private_fields() -> None:
         )
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
-        result = ImageApiClient(http, "https://api.example").get_artifact(
-            "access-secret", "art_1"
-        )
+        result = ImageApiClient(http, "https://api.example").get_artifact("access-secret", "art_1")
 
     assert result == {"artifact_id": "art_1", "result": {"artifact": {"sha256": "a" * 64}}}
 
@@ -438,3 +437,131 @@ def test_artifact_download_rejects_integrity_mismatch_without_output(tmp_path: P
             "access-secret", "art_generation01", output
         )
     assert not output.exists()
+
+
+def test_batch_plan_uses_native_server_planner_and_preserves_resolved_prompts() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = request.read().decode()
+        assert request.url.path == "/v1/batch-plans"
+        assert request.headers["Idempotency-Key"]
+        assert '"intent":"blue cup"' in body
+        return httpx.Response(
+            201,
+            json={
+                "plan_id": "bplan_1",
+                "created_at": "2026-08-21T00:00:00Z",
+                "profile": "generation-standard",
+                "model_revision": "model-revision",
+                "width": 512,
+                "height": 512,
+                "root_seed": 42,
+                "items": [
+                    {"index": 0, "prompt": "resolved blue cup", "seed": 7},
+                    {"index": 1, "prompt": "alternate blue cup", "seed": 8},
+                ],
+                "estimated_cost_usd": "0.080000000",
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").create_batch_plan(
+            "access-secret",
+            intent="blue cup",
+            width=512,
+            height=512,
+            candidate_count=2,
+            root_seed=42,
+        )
+
+    assert [item["prompt"] for item in result["items"]] == [
+        "resolved blue cup",
+        "alternate blue cup",
+    ]
+    assert len(requests) == 1
+
+
+def test_campaign_run_waits_with_one_idempotent_write_and_bounded_reads() -> None:
+    requests: list[httpx.Request] = []
+    now = [0.0]
+
+    def sleep(delay: float) -> None:
+        now[0] += delay
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "POST":
+            assert request.url.path == "/v1/campaigns"
+            assert request.headers["Idempotency-Key"]
+            return httpx.Response(
+                202,
+                json={"campaign_id": "campaign_1", "status": "queued"},
+                request=request,
+            )
+        return httpx.Response(
+            200,
+            json={"campaign_id": "campaign_1", "status": "completed"},
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(
+            http, "https://api.example", sleeper=sleep, clock=lambda: now[0]
+        ).create_campaign(
+            "access-secret",
+            plan_id="bplan_1",
+            max_cost_usd=Decimal("0.08"),
+            wait_seconds=30,
+        )
+
+    assert result["status"] == "completed"
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("POST", "/v1/campaigns"),
+        ("GET", "/v1/campaigns/campaign_1"),
+    ]
+
+
+def test_campaign_results_follow_only_canonical_child_jobs_and_artifacts() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/campaigns/campaign_1":
+            return httpx.Response(
+                200,
+                json={
+                    "campaign_id": "campaign_1",
+                    "status": "completed",
+                    "child_job_ids": ["job_1"],
+                },
+                request=request,
+            )
+        return httpx.Response(
+            200,
+            json={
+                "job_id": "job_1",
+                "status": "completed",
+                "outputs": [{"artifact_id": "art_1"}],
+                "prompt": "must be removed",
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").campaign_results(
+            "access-secret", "campaign_1"
+        )
+
+    assert result["artifacts"] == [{"job_id": "job_1", "artifact_id": "art_1"}]
+    assert "prompt" not in result["jobs"][0]
+
+
+@pytest.mark.parametrize("wait", [61, 120])
+def test_campaign_long_wait_requires_explicit_opt_in(wait: int) -> None:
+    with (
+        httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(500))) as http,
+        pytest.raises(ApiError, match="allow-long-wait"),
+    ):
+        ImageApiClient(http, "https://api.example").create_campaign(
+            "access-secret", plan_id="bplan_1", max_cost_usd="0.04", wait_seconds=wait
+        )
