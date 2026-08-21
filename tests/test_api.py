@@ -4,7 +4,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from image_platform_cli.api import ImageApiClient, save_image
+from image_platform_cli.api import ImageApiClient, _resolve_seed, save_image
 from image_platform_cli.errors import ApiError
 
 
@@ -74,7 +74,13 @@ def test_generate_polls_and_downloads_without_leaking_oauth_token(tmp_path: Path
                 json={
                     "job_id": "job_generation01",
                     "status": "completed",
-                    "steps": [],
+                    "steps": [
+                        {
+                            "id": "generate",
+                            "status": "completed",
+                            "value_outputs": {"seed": 1},
+                        }
+                    ],
                     "outputs": [{"artifact_id": "art_generation01"}],
                     "cost": {"estimated_usd": "0.04", "actual_usd": "0.03"},
                 },
@@ -116,6 +122,7 @@ def test_generate_accepts_immediate_completed_artifact() -> None:
                     "job_id": "job_generation01",
                     "status": "completed",
                     "result": artifact(data),
+                    "seed": 1,
                 },
                 request=request,
             )
@@ -181,3 +188,11 @@ def test_generate_reports_only_safe_status_and_request_id() -> None:
         )
     assert str(captured.value) == "image API returned HTTP 403 (request request-safe)"
     assert "secret upstream detail" not in str(captured.value)
+
+
+def test_unspecified_seed_resolves_to_random_nonzero_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("image_platform_cli.api.secrets.randbelow", lambda upper: upper - 2)
+
+    assert _resolve_seed(None) == 2**63 - 2
+    assert _resolve_seed(0) == 0
+    assert _resolve_seed(42) == 42

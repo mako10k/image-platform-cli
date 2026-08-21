@@ -29,7 +29,7 @@ def parser() -> argparse.ArgumentParser:
     generate.add_argument("--output", "-o", type=Path, required=True)
     generate.add_argument("--width", type=int, default=1024)
     generate.add_argument("--height", type=int, default=1024)
-    generate.add_argument("--seed", type=int, default=0)
+    generate.add_argument("--seed", type=int)
     generate.add_argument("--optimize", action="store_true")
     generate.add_argument("--wait", type=int, default=30)
     generate.add_argument("--allow-long-wait", action="store_true")
@@ -64,6 +64,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 save_image(image, args.output)
                 print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
                 print(f"SHA-256: {image.sha256}")
+                print(f"Seed: {image.seed}")
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or ["images:generate", "campaigns:read", "artifacts:read"]),

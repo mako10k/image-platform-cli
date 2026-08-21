@@ -1,5 +1,6 @@
 import hashlib
 import os
+import secrets
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -39,12 +40,13 @@ class ImageApiClient:
         prompt: str,
         width: int,
         height: int,
-        seed: int,
+        seed: int | None,
         optimize: bool,
         wait_seconds: int = 30,
         allow_long_wait: bool = False,
     ) -> GeneratedImage:
-        self._validate_request(prompt, width, height, seed, wait_seconds, allow_long_wait)
+        effective_seed = _resolve_seed(seed)
+        self._validate_request(prompt, width, height, effective_seed, wait_seconds, allow_long_wait)
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Idempotency-Key": str(uuid4()),
@@ -58,7 +60,7 @@ class ImageApiClient:
                     "profile": "generation-standard",
                     "width": width,
                     "height": height,
-                    "seed": seed,
+                    "seed": effective_seed,
                     "optimizer_enabled": optimize,
                     "execution": {
                         "wait_seconds": wait_seconds,
@@ -67,19 +69,23 @@ class ImageApiClient:
                     },
                 },
             )
-            artifact = (
+            artifact, confirmed_seed = (
                 self._poll(response, headers)
                 if response.status_code == 202
                 else self._artifact_from_completed_response(response)
             )
-            image = self._download_artifact(artifact)
+            if confirmed_seed != effective_seed:
+                raise ApiError("image API returned an unexpected effective seed")
+            image = self._download_artifact(artifact, confirmed_seed)
         except httpx.HTTPError as error:
             raise ApiError("image API request failed") from error
         if image.width != width or image.height != height:
             raise ApiError("image API returned unexpected dimensions")
         return image
 
-    def _poll(self, response: httpx.Response, headers: dict[str, str]) -> dict[str, Any]:
+    def _poll(
+        self, response: httpx.Response, headers: dict[str, str]
+    ) -> tuple[dict[str, Any], int]:
         body = _required_dict(response.json())
         status_url = _same_origin_url(_required_string(body, "status_url"), self._api_origin)
         deadline = self._clock() + self._polling_timeout_seconds
@@ -98,26 +104,33 @@ class ImageApiClient:
                 if not isinstance(outputs, list) or len(outputs) != 1:
                     raise ApiError("image API returned a malformed Job result")
                 artifact_id = _required_string(_required_dict(outputs[0]), "artifact_id")
+                steps = snapshot.get("steps")
+                if not isinstance(steps, list) or len(steps) != 1:
+                    raise ApiError("image API returned a malformed Job result")
+                values = _required_dict(_required_dict(steps[0]).get("value_outputs"))
+                confirmed_seed = _required_int(values, "seed")
                 artifact_response = self._http.get(
                     f"{self._api_base_url}/v1/artifacts/{artifact_id}", headers=headers
                 )
                 if not artifact_response.is_success:
                     raise ApiError(_safe_api_error(artifact_response))
-                return _required_dict(artifact_response.json())
+                return _required_dict(artifact_response.json()), confirmed_seed
             if job_status in TERMINAL_FAILURES:
                 raise ApiError(f"image generation ended with status {job_status}")
             delay = _retry_after(status_response)
 
     @staticmethod
-    def _artifact_from_completed_response(response: httpx.Response) -> dict[str, Any]:
+    def _artifact_from_completed_response(
+        response: httpx.Response,
+    ) -> tuple[dict[str, Any], int]:
         if not response.is_success:
             raise ApiError(_safe_api_error(response))
         body = _required_dict(response.json())
         if _required_string(body, "status") != "completed":
             raise ApiError("image API returned a malformed completion")
-        return _required_dict(body.get("result"))
+        return _required_dict(body.get("result")), _required_int(body, "seed")
 
-    def _download_artifact(self, artifact: dict[str, Any]) -> GeneratedImage:
+    def _download_artifact(self, artifact: dict[str, Any], seed: int) -> GeneratedImage:
         ready = _required_dict(artifact.get("result"))
         metadata = _required_dict(ready.get("artifact"))
         url = _required_string(ready, "url")
@@ -145,7 +158,7 @@ class ImageApiClient:
             or (width, height) != (png_width, png_height)
         ):
             raise ApiError("image API response integrity check failed")
-        return GeneratedImage(data, mime_type, digest, width, height)
+        return GeneratedImage(data, mime_type, digest, width, height, seed)
 
     @staticmethod
     def _validate_request(
@@ -241,3 +254,7 @@ def _retry_after(response: httpx.Response) -> float:
     except ValueError:
         return 1.0
     return min(10.0, max(0.1, value))
+
+
+def _resolve_seed(seed: int | None) -> int:
+    return secrets.randbelow(2**63 - 1) + 1 if seed is None else seed

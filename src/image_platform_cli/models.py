@@ -41,3 +41,4 @@ class GeneratedImage:
     sha256: str
     width: int
     height: int
+    seed: int
