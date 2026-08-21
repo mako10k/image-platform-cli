@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hashlib
 import os
 import re
@@ -21,6 +23,8 @@ TERMINAL_FAILURES = frozenset({"failed", "partial", "cancelled"})
 TERMINAL_CAMPAIGN_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
 MAX_PAGE_SIZE = 100
 MAX_ARTIFACT_DOWNLOAD_BYTES = 100 * 1024 * 1024
+MAX_EDIT_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_EDIT_PIXELS = 4_194_304
 _SENSITIVE_RESPONSE_KEYS = frozenset(
     {"url", "signed_url", "object_key", "staging_key", "query", "upload"}
 )
@@ -94,6 +98,74 @@ class ImageApiClient:
             "status": _required_string(body, "status"),
             "capabilities": capabilities,
         }
+
+    def image_to_image(
+        self,
+        access_token: str,
+        *,
+        prompt: str,
+        input_path: Path,
+        profile: str,
+        negative_prompt: str | None,
+        strength: Decimal,
+        guidance_scale: Decimal,
+        inference_steps: int,
+        seed: int | None,
+        width: int | None,
+        height: int | None,
+    ) -> GeneratedImage:
+        source, mime_type = _read_edit_input(input_path)
+        effective_seed = _resolve_seed(seed)
+        _validate_image_to_image_controls(
+            prompt,
+            negative_prompt,
+            strength,
+            guidance_scale,
+            inference_steps,
+            effective_seed,
+            width,
+            height,
+        )
+        payload: dict[str, object] = {
+            "profile": profile,
+            "prompt": prompt,
+            "input": {
+                "mime_type": mime_type,
+                "data_base64": base64.b64encode(source).decode("ascii"),
+            },
+            "strength": str(strength),
+            "guidance_scale": str(guidance_scale),
+            "inference_steps": inference_steps,
+            "seed": effective_seed,
+        }
+        if negative_prompt is not None:
+            payload["negative_prompt"] = negative_prompt
+        if width is not None and height is not None:
+            payload["width"] = width
+            payload["height"] = height
+        body = self._request_json("POST", "/v1/image-to-image", access_token, json=payload)
+        output = _required_dict(body.get("output"))
+        metadata = _required_dict(output.get("image"))
+        encoded = _required_string(output, "data_base64")
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as error:
+            raise ApiError("image API returned invalid image Base64") from error
+        image = _verified_generated_image(data, metadata, effective_seed)
+        receipt = _required_dict(body.get("receipt"))
+        controls = _required_dict(receipt.get("controls"))
+        if (
+            _required_string(receipt, "profile") != profile
+            or _required_int(receipt, "seed") != effective_seed
+            or _required_decimal(controls, "strength") != strength
+            or _required_decimal(controls, "guidance_scale") != guidance_scale
+            or _required_int(controls, "inference_steps") != inference_steps
+            or _required_bool(controls, "negative_prompt_applied") != (negative_prompt is not None)
+            or _required_int(controls, "width") != image.width
+            or _required_int(controls, "height") != image.height
+        ):
+            raise ApiError("image API returned inconsistent image-to-image receipt")
+        return image
 
     def list_jobs(
         self,
@@ -611,6 +683,85 @@ def require_available_output(output: Path) -> None:
         raise ApiError("output file already exists")
 
 
+def _read_edit_input(path: Path) -> tuple[bytes, str]:
+    if not path.is_file():
+        raise ApiError("input image does not exist or is not a regular file")
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise ApiError("input image could not be read") from error
+    if not data or len(data) > MAX_EDIT_IMAGE_BYTES:
+        raise ApiError("input image must contain at most 10 MiB")
+    try:
+        with Image.open(BytesIO(data)) as image:
+            image_format = image.format
+            width, height = image.size
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        raise ApiError("input image is invalid") from error
+    mime_type = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(
+        image_format or ""
+    )
+    if mime_type is None:
+        raise ApiError("input image must be PNG, JPEG, or WebP")
+    if width <= 0 or height <= 0 or width * height > MAX_EDIT_PIXELS:
+        raise ApiError("input image exceeds the supported pixel limit")
+    return data, mime_type
+
+
+def _validate_image_to_image_controls(
+    prompt: str,
+    negative_prompt: str | None,
+    strength: Decimal,
+    guidance_scale: Decimal,
+    inference_steps: int,
+    seed: int,
+    width: int | None,
+    height: int | None,
+) -> None:
+    if not prompt.strip() or len(prompt) > 2048:
+        raise ApiError("prompt must contain 1 to 2048 non-whitespace characters")
+    if negative_prompt is not None and (not negative_prompt.strip() or len(negative_prompt) > 2048):
+        raise ApiError("negative prompt must contain 1 to 2048 non-whitespace characters")
+    if not strength.is_finite() or not Decimal("0.1") <= strength <= Decimal(1):
+        raise ApiError("strength must be from 0.1 through 1")
+    if not guidance_scale.is_finite() or not Decimal(1) <= guidance_scale <= Decimal(15):
+        raise ApiError("guidance scale must be from 1 through 15")
+    if negative_prompt is not None and guidance_scale <= 1:
+        raise ApiError("negative prompt requires guidance scale greater than 1")
+    if isinstance(inference_steps, bool) or not 10 <= inference_steps <= 50:
+        raise ApiError("steps must be from 10 through 50")
+    if seed < 0 or seed > 2**63 - 1:
+        raise ApiError("seed is outside the supported range")
+    if (width is None) != (height is None):
+        raise ApiError("width and height must be supplied together")
+    for name, value in (("width", width), ("height", height)):
+        if value is not None and (value < 256 or value > 768 or value % 64):
+            raise ApiError(f"{name} must be a multiple of 64 from 256 through 768")
+
+
+def _verified_generated_image(data: bytes, metadata: dict[str, Any], seed: int) -> GeneratedImage:
+    mime_type = _required_string(metadata, "mime_type")
+    sha256 = _required_string(metadata, "sha256")
+    size_bytes = _required_int(metadata, "size_bytes")
+    width = _required_int(metadata, "width")
+    height = _required_int(metadata, "height")
+    digest = hashlib.sha256(data).hexdigest()
+    try:
+        png_width, png_height = _png_dimensions(data)
+    except ApiError as error:
+        raise ApiError("image API response integrity check failed") from error
+    if (
+        not data
+        or mime_type != "image/png"
+        or size_bytes != len(data)
+        or sha256 != digest
+        or (width, height) != (png_width, png_height)
+    ):
+        raise ApiError("image API response integrity check failed")
+    return GeneratedImage(data, mime_type, digest, width, height, seed)
+
+
 def _save_bytes_exclusive(data: bytes, output: Path) -> None:
     temporary = output.with_name(f".{output.name}.{secrets.token_hex(8)}.part")
     try:
@@ -813,6 +964,19 @@ def _required_int(body: dict[str, Any], name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         raise ApiError("image API returned a malformed response")
     return value
+
+
+def _required_decimal(body: dict[str, Any], name: str) -> Decimal:
+    value = body.get(name)
+    if not isinstance(value, (str, int)) or isinstance(value, bool):
+        raise ApiError("image API returned a malformed response")
+    try:
+        parsed = Decimal(value)
+    except (InvalidOperation, ValueError) as error:
+        raise ApiError("image API returned a malformed response") from error
+    if not parsed.is_finite():
+        raise ApiError("image API returned a malformed response")
+    return parsed
 
 
 def _origin(url: str) -> tuple[str, str, int | None]:

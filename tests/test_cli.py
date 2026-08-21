@@ -119,3 +119,39 @@ def test_capabilities_surface_and_default_editing_scopes() -> None:
     assert arguments.group == "capabilities"
     assert arguments.json is True
     assert {"images:edit", "images:understand"} <= set(DEFAULT_LOGIN_SCOPES)
+
+
+def test_image_to_image_surface_exposes_bounded_native_controls() -> None:
+    arguments = parser().parse_args(
+        [
+            "edit",
+            "image-to-image",
+            "paint this as watercolor",
+            "--input",
+            "rough.png",
+            "--output",
+            "finished.png",
+            "--negative-prompt",
+            "text",
+            "--strength",
+            "0.6",
+            "--guidance-scale",
+            "8",
+            "--steps",
+            "30",
+            "--seed",
+            "42",
+            "--width",
+            "512",
+            "--height",
+            "640",
+        ]
+    )
+
+    assert arguments.group == "edit" and arguments.command == "image-to-image"
+    assert arguments.input == Path("rough.png")
+    assert arguments.output == Path("finished.png")
+    assert arguments.strength == Decimal("0.6")
+    assert arguments.guidance_scale == Decimal(8)
+    assert arguments.steps == 30 and arguments.seed == 42
+    assert arguments.width == 512 and arguments.height == 640

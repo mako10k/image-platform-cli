@@ -1,3 +1,4 @@
+import base64
 import hashlib
 from decimal import Decimal
 from io import BytesIO
@@ -153,6 +154,105 @@ def test_optimize_prompt_calls_native_planner_endpoint_only() -> None:
     assert b'"width":512' in requests[0].read()
     assert b'"seed":42' in requests[0].read()
     assert b'"height"' not in requests[0].read()
+
+
+def test_image_to_image_uses_native_route_and_verifies_receipt(tmp_path: Path) -> None:
+    source = valid_png(256, 256)
+    result = valid_png(512, 640)
+    input_path = tmp_path / "rough.png"
+    input_path.write_bytes(source)
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        payload = request.read().decode()
+        assert request.url.path == "/v1/image-to-image"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        assert '"profile":"i2i-stable-diffusion-v1-5"' in payload
+        assert '"mime_type":"image/png"' in payload
+        assert '"strength":"0.6"' in payload
+        assert '"guidance_scale":"8"' in payload
+        assert '"inference_steps":30' in payload
+        assert '"seed":42' in payload
+        assert '"width":512' in payload and '"height":640' in payload
+        return httpx.Response(
+            200,
+            json={
+                "output": {
+                    "image": {
+                        "sha256": hashlib.sha256(result).hexdigest(),
+                        "mime_type": "image/png",
+                        "size_bytes": len(result),
+                        "width": 512,
+                        "height": 640,
+                    },
+                    "data_base64": base64.b64encode(result).decode("ascii"),
+                },
+                "receipt": {
+                    "profile": "i2i-stable-diffusion-v1-5",
+                    "seed": 42,
+                    "controls": {
+                        "strength": "0.6",
+                        "negative_prompt_applied": True,
+                        "guidance_scale": "8",
+                        "inference_steps": 30,
+                        "width": 512,
+                        "height": 640,
+                    },
+                },
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        image = ImageApiClient(http, "https://api.example").image_to_image(
+            "access-secret",
+            prompt="paint this as watercolor",
+            input_path=input_path,
+            profile="i2i-stable-diffusion-v1-5",
+            negative_prompt="text",
+            strength=Decimal("0.6"),
+            guidance_scale=Decimal(8),
+            inference_steps=30,
+            seed=42,
+            width=512,
+            height=640,
+        )
+
+    assert image.data == result
+    assert image.sha256 == hashlib.sha256(result).hexdigest()
+    assert image.width == 512 and image.height == 640 and image.seed == 42
+    assert len(requests) == 1
+
+
+def test_image_to_image_rejects_invalid_input_before_request(tmp_path: Path) -> None:
+    input_path = tmp_path / "rough.png"
+    input_path.write_bytes(b"not an image")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(500, request=request)
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as http,
+        pytest.raises(ApiError, match="input image is invalid"),
+    ):
+        ImageApiClient(http, "https://api.example").image_to_image(
+            "access-secret",
+            prompt="watercolor",
+            input_path=input_path,
+            profile="i2i-stable-diffusion-v1-5",
+            negative_prompt=None,
+            strength=Decimal("0.75"),
+            guidance_scale=Decimal("7.5"),
+            inference_steps=25,
+            seed=1,
+            width=None,
+            height=None,
+        )
+
+    assert requests == []
 
 
 def test_capabilities_projects_only_safe_editing_states() -> None:

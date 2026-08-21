@@ -112,6 +112,20 @@ def parser() -> argparse.ArgumentParser:
         parser_.add_argument("--json", action="store_true")
     capabilities = groups.add_parser("capabilities")
     capabilities.add_argument("--json", action="store_true")
+    edit = groups.add_parser("edit")
+    edit_commands = edit.add_subparsers(dest="command", required=True)
+    image_to_image = edit_commands.add_parser("image-to-image", aliases=["i2i"])
+    image_to_image.add_argument("prompt")
+    image_to_image.add_argument("--input", type=Path, required=True)
+    image_to_image.add_argument("--output", "-o", type=Path, required=True)
+    image_to_image.add_argument("--profile", default="i2i-stable-diffusion-v1-5")
+    image_to_image.add_argument("--negative-prompt")
+    image_to_image.add_argument("--strength", type=Decimal, default=Decimal("0.75"))
+    image_to_image.add_argument("--guidance-scale", type=Decimal, default=Decimal("7.5"))
+    image_to_image.add_argument("--steps", type=int, default=25)
+    image_to_image.add_argument("--seed", type=int)
+    image_to_image.add_argument("--width", type=int)
+    image_to_image.add_argument("--height", type=int)
     return root
 
 
@@ -186,6 +200,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 access_token = service.access_token(frozenset())
                 result = ImageApiClient(http, config.api_base_url).capabilities(access_token)
                 _emit(result, args.json)
+            elif args.group == "edit":
+                require_available_output(args.output)
+                image = ImageApiClient(http, config.api_base_url).image_to_image(
+                    service.access_token(frozenset({"images:edit"})),
+                    prompt=args.prompt,
+                    input_path=args.input,
+                    profile=args.profile,
+                    negative_prompt=args.negative_prompt,
+                    strength=args.strength,
+                    guidance_scale=args.guidance_scale,
+                    inference_steps=args.steps,
+                    seed=args.seed,
+                    width=args.width,
+                    height=args.height,
+                )
+                save_image(image, args.output)
+                print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
+                print(f"SHA-256: {image.sha256}")
+                print(f"Seed: {image.seed}")
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),
