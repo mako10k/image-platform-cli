@@ -17,7 +17,7 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 
 from .errors import ApiError
-from .models import GeneratedImage
+from .models import GeneratedImage, SegmentationResult
 
 TERMINAL_FAILURES = frozenset({"failed", "partial", "cancelled"})
 TERMINAL_CAMPAIGN_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
@@ -114,7 +114,7 @@ class ImageApiClient:
         width: int | None,
         height: int | None,
     ) -> GeneratedImage:
-        source, mime_type = _read_edit_input(input_path)
+        source, mime_type, _, _ = _read_edit_input(input_path)
         effective_seed = _resolve_seed(seed)
         _validate_image_to_image_controls(
             prompt,
@@ -166,6 +166,55 @@ class ImageApiClient:
         ):
             raise ApiError("image API returned inconsistent image-to-image receipt")
         return image
+
+    def segment(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        text: str | None,
+        points: Sequence[tuple[int, int, bool]],
+        box: tuple[int, int, int, int] | None,
+    ) -> SegmentationResult:
+        source, mime_type, source_width, source_height = _read_edit_input(input_path)
+        _validate_segment_selector(text, points, box, source_width, source_height)
+        payload: dict[str, object] = {
+            "input": {
+                "mime_type": mime_type,
+                "data_base64": base64.b64encode(source).decode("ascii"),
+            }
+        }
+        if text is not None:
+            payload["text"] = text
+        if points:
+            payload["points"] = [
+                {"x": x, "y": y, "positive": positive} for x, y, positive in points
+            ]
+        if box is not None:
+            payload["box"] = dict(zip(("x_min", "y_min", "x_max", "y_max"), box, strict=True))
+        body = self._request_json("POST", "/v1/segmentations", access_token, json=payload)
+        output = _required_dict(body.get("output"))
+        metadata = _required_dict(output.get("image"))
+        try:
+            mask = base64.b64decode(_required_string(output, "data_base64"), validate=True)
+        except (ValueError, binascii.Error) as error:
+            raise ApiError("image API returned invalid mask Base64") from error
+        digest, width, height = _verified_png(mask, metadata)
+        receipt = _required_dict(body.get("receipt"))
+        input_receipt = _required_dict(receipt.get("input_image"))
+        mask_receipt = _required_dict(receipt.get("mask_image"))
+        if (
+            _required_string(receipt, "profile") != "segment-grounding-dino-sam2-tiny"
+            or _required_string(input_receipt, "sha256") != hashlib.sha256(source).hexdigest()
+            or _required_int(input_receipt, "width") != source_width
+            or _required_int(input_receipt, "height") != source_height
+            or _required_string(mask_receipt, "sha256") != digest
+            or _required_int(mask_receipt, "width") != width
+            or _required_int(mask_receipt, "height") != height
+            or (width, height) != (source_width, source_height)
+        ):
+            raise ApiError("image API returned inconsistent segmentation receipt")
+        return SegmentationResult(source, mask, digest, width, height)
 
     def list_jobs(
         self,
@@ -683,7 +732,7 @@ def require_available_output(output: Path) -> None:
         raise ApiError("output file already exists")
 
 
-def _read_edit_input(path: Path) -> tuple[bytes, str]:
+def _read_edit_input(path: Path) -> tuple[bytes, str, int, int]:
     if not path.is_file():
         raise ApiError("input image does not exist or is not a regular file")
     try:
@@ -706,7 +755,29 @@ def _read_edit_input(path: Path) -> tuple[bytes, str]:
         raise ApiError("input image must be PNG, JPEG, or WebP")
     if width <= 0 or height <= 0 or width * height > MAX_EDIT_PIXELS:
         raise ApiError("input image exceeds the supported pixel limit")
-    return data, mime_type
+    return data, mime_type, width, height
+
+
+def _validate_segment_selector(
+    text: str | None,
+    points: Sequence[tuple[int, int, bool]],
+    box: tuple[int, int, int, int] | None,
+    width: int,
+    height: int,
+) -> None:
+    selector_count = int(text is not None) + int(bool(points)) + int(box is not None)
+    if selector_count != 1:
+        raise ApiError("exactly one of text, points, or box is required")
+    if text is not None and (not text.strip() or len(text) > 2048):
+        raise ApiError("text selector must contain 1 to 2048 non-whitespace characters")
+    if len(points) > 32:
+        raise ApiError("at most 32 segmentation points are supported")
+    if any(x < 0 or y < 0 or x >= width or y >= height for x, y, _ in points):
+        raise ApiError("segmentation point is outside input bounds")
+    if box is not None:
+        x_min, y_min, x_max, y_max = box
+        if not (0 <= x_min < x_max <= width and 0 <= y_min < y_max <= height):
+            raise ApiError("segmentation box is outside input bounds")
 
 
 def _validate_image_to_image_controls(
@@ -741,6 +812,11 @@ def _validate_image_to_image_controls(
 
 
 def _verified_generated_image(data: bytes, metadata: dict[str, Any], seed: int) -> GeneratedImage:
+    digest, width, height = _verified_png(data, metadata)
+    return GeneratedImage(data, "image/png", digest, width, height, seed)
+
+
+def _verified_png(data: bytes, metadata: dict[str, Any]) -> tuple[str, int, int]:
     mime_type = _required_string(metadata, "mime_type")
     sha256 = _required_string(metadata, "sha256")
     size_bytes = _required_int(metadata, "size_bytes")
@@ -759,7 +835,49 @@ def _verified_generated_image(data: bytes, metadata: dict[str, Any], seed: int) 
         or (width, height) != (png_width, png_height)
     ):
         raise ApiError("image API response integrity check failed")
-    return GeneratedImage(data, mime_type, digest, width, height, seed)
+    return digest, width, height
+
+
+def save_segmentation_outputs(
+    result: SegmentationResult,
+    *,
+    mask_output: Path | None,
+    foreground_output: Path | None,
+    background_output: Path | None,
+) -> None:
+    destinations = tuple(
+        output
+        for output in (mask_output, foreground_output, background_output)
+        if output is not None
+    )
+    if not destinations:
+        raise ApiError("at least one segmentation output is required")
+    if len(set(destinations)) != len(destinations):
+        raise ApiError("segmentation output paths must be distinct")
+    for output in destinations:
+        require_available_output(output)
+    if mask_output is not None:
+        _save_bytes_exclusive(result.mask_data, mask_output)
+    if foreground_output is None and background_output is None:
+        return
+    try:
+        with Image.open(BytesIO(result.source_data)) as source_image:
+            source = source_image.convert("RGBA")
+        with Image.open(BytesIO(result.mask_data)) as mask_image:
+            mask = mask_image.convert("L")
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        raise ApiError("segmentation images could not be decoded") from error
+    for rendered_output, alpha in (
+        (foreground_output, mask),
+        (background_output, mask.point(lambda value: 255 - value)),
+    ):
+        if rendered_output is None:
+            continue
+        rendered = source.copy()
+        rendered.putalpha(alpha)
+        buffer = BytesIO()
+        rendered.save(buffer, format="PNG")
+        _save_bytes_exclusive(buffer.getvalue(), rendered_output)
 
 
 def _save_bytes_exclusive(data: bytes, output: Path) -> None:

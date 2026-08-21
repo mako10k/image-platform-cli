@@ -42,3 +42,12 @@ class GeneratedImage:
     width: int
     height: int
     seed: int
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentationResult:
+    source_data: bytes = field(repr=False)
+    mask_data: bytes = field(repr=False)
+    mask_sha256: str
+    width: int
+    height: int

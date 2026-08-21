@@ -2,13 +2,13 @@ import argparse
 import json
 import sys
 import webbrowser
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from decimal import Decimal
 from pathlib import Path
 
 import httpx
 
-from .api import ImageApiClient, require_available_output, save_image
+from .api import ImageApiClient, require_available_output, save_image, save_segmentation_outputs
 from .config import Config
 from .credentials import KeyringCredentialStore
 from .errors import CliError
@@ -126,6 +126,18 @@ def parser() -> argparse.ArgumentParser:
     image_to_image.add_argument("--seed", type=int)
     image_to_image.add_argument("--width", type=int)
     image_to_image.add_argument("--height", type=int)
+    segment = edit_commands.add_parser("segment")
+    segment.add_argument("--input", type=Path, required=True)
+    selectors = segment.add_mutually_exclusive_group(required=True)
+    selectors.add_argument("--text")
+    selectors.add_argument("--box", type=_coordinates(4, "box"))
+    selectors.add_argument("--point", type=_coordinates(2, "point"), action="append")
+    segment.add_argument(
+        "--negative-point", type=_coordinates(2, "negative point"), action="append"
+    )
+    segment.add_argument("--mask-output", type=Path)
+    segment.add_argument("--foreground-output", type=Path)
+    segment.add_argument("--background-output", type=Path)
     return root
 
 
@@ -137,6 +149,21 @@ def _add_collection_arguments(command: argparse.ArgumentParser) -> None:
     command.add_argument("--all", dest="all_pages", action="store_true")
     command.add_argument("--max-items", type=int)
     command.add_argument("--json", action="store_true")
+
+
+def _coordinates(count: int, name: str) -> Callable[[str], tuple[int, ...]]:
+    def parse(value: str) -> tuple[int, ...]:
+        try:
+            coordinates = tuple(int(part) for part in value.split(","))
+        except ValueError as error:
+            raise argparse.ArgumentTypeError(
+                f"{name} must contain comma-separated integers"
+            ) from error
+        if len(coordinates) != count:
+            raise argparse.ArgumentTypeError(f"{name} requires {count} comma-separated integers")
+        return coordinates
+
+    return parse
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -201,24 +228,54 @@ def main(argv: Sequence[str] | None = None) -> int:
                 result = ImageApiClient(http, config.api_base_url).capabilities(access_token)
                 _emit(result, args.json)
             elif args.group == "edit":
-                require_available_output(args.output)
-                image = ImageApiClient(http, config.api_base_url).image_to_image(
-                    service.access_token(frozenset({"images:edit"})),
-                    prompt=args.prompt,
-                    input_path=args.input,
-                    profile=args.profile,
-                    negative_prompt=args.negative_prompt,
-                    strength=args.strength,
-                    guidance_scale=args.guidance_scale,
-                    inference_steps=args.steps,
-                    seed=args.seed,
-                    width=args.width,
-                    height=args.height,
-                )
-                save_image(image, args.output)
-                print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
-                print(f"SHA-256: {image.sha256}")
-                print(f"Seed: {image.seed}")
+                api = ImageApiClient(http, config.api_base_url)
+                if args.command in {"image-to-image", "i2i"}:
+                    require_available_output(args.output)
+                    image = api.image_to_image(
+                        service.access_token(frozenset({"images:edit"})),
+                        prompt=args.prompt,
+                        input_path=args.input,
+                        profile=args.profile,
+                        negative_prompt=args.negative_prompt,
+                        strength=args.strength,
+                        guidance_scale=args.guidance_scale,
+                        inference_steps=args.steps,
+                        seed=args.seed,
+                        width=args.width,
+                        height=args.height,
+                    )
+                    save_image(image, args.output)
+                    print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
+                    print(f"SHA-256: {image.sha256}")
+                    print(f"Seed: {image.seed}")
+                else:
+                    outputs = (args.mask_output, args.foreground_output, args.background_output)
+                    selected_outputs = tuple(output for output in outputs if output is not None)
+                    if not selected_outputs:
+                        raise CliError("at least one segmentation output is required")
+                    if len(set(selected_outputs)) != len(selected_outputs):
+                        raise CliError("segmentation output paths must be distinct")
+                    for output in selected_outputs:
+                        require_available_output(output)
+                    if args.negative_point and not args.point:
+                        raise CliError("negative points require at least one positive --point")
+                    positive = [(x, y, True) for x, y in (args.point or [])]
+                    negative = [(x, y, False) for x, y in (args.negative_point or [])]
+                    segmented = api.segment(
+                        service.access_token(frozenset({"images:understand"})),
+                        input_path=args.input,
+                        text=args.text,
+                        points=positive + negative,
+                        box=tuple(args.box) if args.box is not None else None,
+                    )
+                    save_segmentation_outputs(
+                        segmented,
+                        mask_output=args.mask_output,
+                        foreground_output=args.foreground_output,
+                        background_output=args.background_output,
+                    )
+                    print(f"Saved {segmented.width}x{segmented.height} segmentation outputs.")
+                    print(f"Mask SHA-256: {segmented.mask_sha256}")
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),

@@ -13,8 +13,10 @@ from image_platform_cli.api import (
     _resolve_seed,
     require_available_output,
     save_image,
+    save_segmentation_outputs,
 )
 from image_platform_cli.errors import ApiError
+from image_platform_cli.models import SegmentationResult
 
 
 def png_header(width: int, height: int) -> bytes:
@@ -253,6 +255,109 @@ def test_image_to_image_rejects_invalid_input_before_request(tmp_path: Path) -> 
         )
 
     assert requests == []
+
+
+def test_segment_uses_point_selector_and_verifies_mask_receipt(tmp_path: Path) -> None:
+    source = valid_png(256, 256)
+    mask_output = BytesIO()
+    Image.new("L", (256, 256), 255).save(mask_output, format="PNG")
+    mask = mask_output.getvalue()
+    input_path = tmp_path / "scene.png"
+    input_path.write_bytes(source)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = request.read().decode()
+        assert request.url.path == "/v1/segmentations"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        assert '"points":[{"x":12,"y":34,"positive":true}' in payload
+        assert '{"x":56,"y":78,"positive":false}' in payload
+        source_metadata = {
+            "sha256": hashlib.sha256(source).hexdigest(),
+            "width": 256,
+            "height": 256,
+        }
+        mask_metadata = {
+            "sha256": hashlib.sha256(mask).hexdigest(),
+            "mime_type": "image/png",
+            "size_bytes": len(mask),
+            "width": 256,
+            "height": 256,
+        }
+        return httpx.Response(
+            200,
+            json={
+                "output": {
+                    "image": mask_metadata,
+                    "data_base64": base64.b64encode(mask).decode("ascii"),
+                },
+                "receipt": {
+                    "profile": "segment-grounding-dino-sam2-tiny",
+                    "input_image": source_metadata,
+                    "mask_image": mask_metadata,
+                },
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").segment(
+            "access-secret",
+            input_path=input_path,
+            text=None,
+            points=[(12, 34, True), (56, 78, False)],
+            box=None,
+        )
+
+    assert result.mask_data == mask
+    assert result.mask_sha256 == hashlib.sha256(mask).hexdigest()
+
+
+def test_segmentation_outputs_are_all_preflighted_before_writing(tmp_path: Path) -> None:
+    source = valid_png(256, 256)
+    mask_buffer = BytesIO()
+    Image.new("L", (256, 256), 255).save(mask_buffer, format="PNG")
+    mask = mask_buffer.getvalue()
+    result = SegmentationResult(source, mask, hashlib.sha256(mask).hexdigest(), 256, 256)
+    mask_path = tmp_path / "mask.png"
+    foreground_path = tmp_path / "foreground.png"
+    foreground_path.write_bytes(b"existing")
+
+    with pytest.raises(ApiError, match="already exists"):
+        save_segmentation_outputs(
+            result,
+            mask_output=mask_path,
+            foreground_output=foreground_path,
+            background_output=None,
+        )
+
+    assert not mask_path.exists()
+    assert foreground_path.read_bytes() == b"existing"
+
+
+def test_segmentation_writes_mask_foreground_and_background(tmp_path: Path) -> None:
+    source = valid_png(256, 256)
+    mask_buffer = BytesIO()
+    Image.new("L", (256, 256), 255).save(mask_buffer, format="PNG")
+    mask = mask_buffer.getvalue()
+    result = SegmentationResult(source, mask, hashlib.sha256(mask).hexdigest(), 256, 256)
+    mask_path = tmp_path / "mask.png"
+    foreground_path = tmp_path / "foreground.png"
+    background_path = tmp_path / "background.png"
+
+    save_segmentation_outputs(
+        result,
+        mask_output=mask_path,
+        foreground_output=foreground_path,
+        background_output=background_path,
+    )
+
+    assert mask_path.read_bytes() == mask
+    with Image.open(foreground_path) as foreground:
+        assert foreground.mode == "RGBA" and foreground.size == (256, 256)
+        assert foreground.getchannel("A").getextrema() == (255, 255)
+    with Image.open(background_path) as background:
+        assert background.mode == "RGBA" and background.size == (256, 256)
+        assert background.getchannel("A").getextrema() == (0, 0)
 
 
 def test_capabilities_projects_only_safe_editing_states() -> None:

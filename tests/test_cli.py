@@ -155,3 +155,50 @@ def test_image_to_image_surface_exposes_bounded_native_controls() -> None:
     assert arguments.guidance_scale == Decimal(8)
     assert arguments.steps == 30 and arguments.seed == 42
     assert arguments.width == 512 and arguments.height == 640
+
+
+def test_segment_surface_supports_text_point_box_and_explicit_outputs() -> None:
+    text = parser().parse_args(
+        [
+            "edit",
+            "segment",
+            "--input",
+            "scene.png",
+            "--text",
+            "girl",
+            "--mask-output",
+            "mask.png",
+        ]
+    )
+    points = parser().parse_args(
+        [
+            "edit",
+            "segment",
+            "--input",
+            "scene.png",
+            "--point",
+            "10,20",
+            "--negative-point",
+            "30,40",
+            "--foreground-output",
+            "foreground.png",
+        ]
+    )
+    box = parser().parse_args(
+        [
+            "edit",
+            "segment",
+            "--input",
+            "scene.png",
+            "--box",
+            "1,2,100,200",
+            "--background-output",
+            "background.png",
+        ]
+    )
+
+    assert text.text == "girl" and text.mask_output == Path("mask.png")
+    assert points.point == [(10, 20)] and points.negative_point == [(30, 40)]
+    assert points.foreground_output == Path("foreground.png")
+    assert box.box == (1, 2, 100, 200)
+    assert box.background_output == Path("background.png")
