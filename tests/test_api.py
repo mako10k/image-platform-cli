@@ -65,8 +65,10 @@ def test_generate_polls_and_downloads_without_leaking_oauth_token(tmp_path: Path
                 json={
                     "job_id": "job_generation01",
                     "status": "queued",
-                    "status_url": "https://api.example/v1/jobs/job_generation01",
-                    "cancel_url": "https://api.example/v1/jobs/job_generation01/cancel",
+                    "status_url": "https://api-staging.image.mk10.org/v1/jobs/job_generation01",
+                    "cancel_url": (
+                        "https://api-staging.image.mk10.org/v1/jobs/job_generation01/cancel"
+                    ),
                     "submitted_at": "2026-08-21T00:00:00Z",
                     "execution": {"wait_seconds": 0},
                 },
@@ -99,7 +101,9 @@ def test_generate_polls_and_downloads_without_leaking_oauth_token(tmp_path: Path
         return httpx.Response(200, content=data, request=request)
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
-        image = ImageApiClient(http, "https://api.example", sleeper=lambda _delay: None).generate(
+        image = ImageApiClient(
+            http, "https://api-staging.image.mk10.org", sleeper=lambda _delay: None
+        ).generate(
             "access-secret",
             prompt="blue cup",
             width=256,
@@ -125,20 +129,60 @@ def test_optimize_prompt_calls_native_planner_endpoint_only() -> None:
         assert request.headers["Authorization"] == "Bearer access-secret"
         return httpx.Response(
             200,
-            json={"prompt": "a carefully composed blue cup"},
+            json={"prompt": "a carefully composed blue cup", "seed": 42},
             request=request,
         )
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         optimized = ImageApiClient(http, "https://api.example").optimize_prompt(
-            "access-secret", prompt="blue cup", width=512
+            "access-secret", prompt="blue cup", width=512, seed=42
         )
 
     assert optimized == "a carefully composed blue cup"
     assert [request.url.path for request in requests] == ["/v1/prompt-plans"]
     assert b'"query":"blue cup"' in requests[0].read()
     assert b'"width":512' in requests[0].read()
+    assert b'"seed":42' in requests[0].read()
     assert b'"height"' not in requests[0].read()
+
+
+def test_optimize_prompt_rejects_mismatched_effective_seed() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"prompt": "optimized", "seed": 8}, request=request)
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as http,
+        pytest.raises(ApiError, match="unexpected effective seed"),
+    ):
+        ImageApiClient(http, "https://api.example").optimize_prompt(
+            "access-secret", prompt="blue cup", seed=7
+        )
+
+
+def test_optimize_prompt_reports_safe_server_reason_code_without_message() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            502,
+            headers={"X-Request-ID": "request-1"},
+            json={
+                "code": "prompt_word_count_invalid",
+                "message": "must not be disclosed by the CLI",
+            },
+            request=request,
+        )
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as http,
+        pytest.raises(
+            ApiError,
+            match=r"HTTP 502 \[prompt_word_count_invalid\] \(request request-1\)$",
+        ) as raised,
+    ):
+        ImageApiClient(http, "https://api.example").optimize_prompt(
+            "access-secret", prompt="blue cup", seed=7
+        )
+
+    assert "must not be disclosed" not in str(raised.value)
 
 
 def test_generate_accepts_immediate_completed_artifact() -> None:

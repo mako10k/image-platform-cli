@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import secrets
 import time
 from collections.abc import Callable
@@ -40,6 +41,7 @@ class ImageApiClient:
         prompt: str,
         width: int | None = None,
         height: int | None = None,
+        seed: int | None = None,
     ) -> str:
         """Request the server-owned Prompt Planner; never call its text provider directly."""
 
@@ -48,9 +50,11 @@ class ImageApiClient:
         for name, value in (("width", width), ("height", height)):
             if value is not None and (value < 256 or value > 1024 or value % 64):
                 raise ApiError(f"{name} must be a multiple of 64 from 256 through 1024")
+        effective_seed = _resolve_seed(seed)
         payload: dict[str, object] = {
             "query": prompt,
             "profile": "generation-standard",
+            "seed": effective_seed,
         }
         if width is not None:
             payload["width"] = width
@@ -66,7 +70,10 @@ class ImageApiClient:
             raise ApiError("image API request failed") from error
         if not response.is_success:
             raise ApiError(_safe_api_error(response))
-        return _required_string(_required_dict(response.json()), "prompt")
+        body = _required_dict(response.json())
+        if _required_int(body, "seed") != effective_seed:
+            raise ApiError("image API returned an unexpected effective seed")
+        return _required_string(body, "prompt")
 
     def generate(
         self,
@@ -253,7 +260,15 @@ def _png_dimensions(data: bytes) -> tuple[int, int]:
 def _safe_api_error(response: httpx.Response) -> str:
     request_id = response.headers.get("X-Request-ID")
     suffix = f" (request {request_id})" if request_id else ""
-    return f"image API returned HTTP {response.status_code}{suffix}"
+    reason = ""
+    try:
+        body = response.json()
+        code = body.get("code") if isinstance(body, dict) else None
+        if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code):
+            reason = f" [{code}]"
+    except ValueError:
+        pass
+    return f"image API returned HTTP {response.status_code}{reason}{suffix}"
 
 
 def _required_dict(value: Any) -> dict[str, Any]:

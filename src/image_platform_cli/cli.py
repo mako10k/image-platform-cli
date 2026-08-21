@@ -39,6 +39,7 @@ def parser() -> argparse.ArgumentParser:
     optimize.add_argument("prompt")
     optimize.add_argument("--width", type=int)
     optimize.add_argument("--height", type=int)
+    optimize.add_argument("--seed", type=int)
     return root
 
 
@@ -79,6 +80,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     prompt=args.prompt,
                     width=args.width,
                     height=args.height,
+                    seed=args.seed,
                 )
                 print(optimized)
             elif args.command == "login":

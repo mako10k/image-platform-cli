@@ -30,7 +30,17 @@ def test_explicit_seed_is_preserved_by_parser() -> None:
 
 def test_prompt_optimize_is_a_native_prompt_plan_command() -> None:
     arguments = parser().parse_args(
-        ["prompt", "optimize", "blue cup", "--width", "512", "--height", "768"]
+        [
+            "prompt",
+            "optimize",
+            "blue cup",
+            "--width",
+            "512",
+            "--height",
+            "768",
+            "--seed",
+            "42",
+        ]
     )
 
     assert arguments.group == "prompt"
@@ -38,3 +48,4 @@ def test_prompt_optimize_is_a_native_prompt_plan_command() -> None:
     assert arguments.prompt == "blue cup"
     assert arguments.width == 512
     assert arguments.height == 768
+    assert arguments.seed == 42
