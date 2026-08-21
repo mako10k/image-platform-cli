@@ -4,7 +4,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-from image_platform_cli.api import ImageApiClient, _resolve_seed, save_image
+from image_platform_cli.api import (
+    ImageApiClient,
+    _resolve_seed,
+    require_available_output,
+    save_image,
+)
 from image_platform_cli.errors import ApiError
 
 
@@ -196,3 +201,13 @@ def test_unspecified_seed_resolves_to_random_nonzero_value(monkeypatch: pytest.M
     assert _resolve_seed(None) == 2**63 - 2
     assert _resolve_seed(0) == 0
     assert _resolve_seed(42) == 42
+
+
+def test_output_conflict_is_rejected_by_preflight_before_generation(tmp_path: Path) -> None:
+    output = tmp_path / "existing.png"
+    output.write_bytes(b"existing")
+
+    with pytest.raises(ApiError, match="already exists"):
+        require_available_output(output)
+
+    assert output.read_bytes() == b"existing"

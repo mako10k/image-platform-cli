@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from .api import ImageApiClient, save_image
+from .api import ImageApiClient, require_available_output, save_image
 from .config import Config
 from .credentials import KeyringCredentialStore
 from .errors import CliError
@@ -48,6 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 KeyringCredentialStore(),
             )
             if args.group == "generate":
+                require_available_output(args.output)
                 access_token = service.access_token(
                     frozenset({"images:generate", "campaigns:read", "artifacts:read"})
                 )

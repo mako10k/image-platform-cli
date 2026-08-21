@@ -184,8 +184,7 @@ class ImageApiClient:
 
 
 def save_image(image: GeneratedImage, output: Path) -> None:
-    if not output.parent.is_dir():
-        raise ApiError("output directory does not exist")
+    require_available_output(output)
     try:
         with output.open("xb") as stream:
             stream.write(image.data)
@@ -199,6 +198,15 @@ def save_image(image: GeneratedImage, output: Path) -> None:
         except OSError:
             pass
         raise ApiError("output file could not be written") from error
+
+
+def require_available_output(output: Path) -> None:
+    """Reject known output conflicts before authentication or paid generation starts."""
+
+    if not output.parent.is_dir():
+        raise ApiError("output directory does not exist")
+    if output.exists():
+        raise ApiError("output file already exists")
 
 
 def _png_dimensions(data: bytes) -> tuple[int, int]:
