@@ -25,6 +25,12 @@ _SENSITIVE_RESPONSE_KEYS = frozenset(
     {"url", "signed_url", "object_key", "staging_key", "query", "upload"}
 )
 QueryValue = str | int | float | bool | None
+EDIT_CAPABILITY_ROUTES = (
+    ("image_to_image", "edit", "/v1/image-to-image"),
+    ("segmentation", "segment", "/v1/segmentations"),
+    ("image_operations", "image_ops", "/v1/image-operations"),
+    ("inpaint", "inpaint", "/v1/images/edits"),
+)
 
 
 class ImageApiClient:
@@ -43,6 +49,51 @@ class ImageApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def capabilities(self, access_token: str) -> dict[str, Any]:
+        body = self._request_json("GET", "/v1/capabilities", access_token)
+        raw_states = body.get("operation_states")
+        if not isinstance(raw_states, list):
+            raise ApiError("image API returned malformed capabilities")
+        states: dict[str, dict[str, Any]] = {}
+        for raw_state in raw_states:
+            state = _required_dict(raw_state)
+            operation = _required_string(state, "operation")
+            if operation in states:
+                raise ApiError("image API returned duplicate capability state")
+            states[operation] = state
+
+        capabilities: list[dict[str, object]] = []
+        for name, operation, endpoint in EDIT_CAPABILITY_ROUTES:
+            selected_state = states.get(operation)
+            if selected_state is None:
+                raise ApiError("image API omitted an editing capability")
+            reason = selected_state.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise ApiError("image API returned malformed capabilities")
+            declared = _required_bool(selected_state, "declared")
+            configured = _required_bool(selected_state, "configured")
+            authorized = _required_bool(selected_state, "authorized")
+            if not declared or ((not configured or not authorized) and reason is None):
+                raise ApiError("image API returned inconsistent capabilities")
+            if configured and authorized and reason is not None:
+                raise ApiError("image API returned inconsistent capabilities")
+            capabilities.append(
+                {
+                    "name": name,
+                    "operation": operation,
+                    "endpoint": endpoint,
+                    "declared": declared,
+                    "configured": configured,
+                    "authorized": authorized,
+                    "reason": reason,
+                }
+            )
+        return {
+            "service": _required_string(body, "service"),
+            "status": _required_string(body, "status"),
+            "capabilities": capabilities,
+        }
 
     def list_jobs(
         self,
@@ -747,6 +798,13 @@ def _required_string(body: dict[str, Any], name: str) -> str:
     value = body.get(name)
     if not isinstance(value, str) or not value:
         raise ApiError("image API returned a malformed response")
+    return value
+
+
+def _required_bool(body: dict[str, Any], name: str) -> bool:
+    value = body.get(name)
+    if not isinstance(value, bool):
+        raise ApiError(f"image API response is missing {name}")
     return value
 
 

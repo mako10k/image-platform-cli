@@ -155,6 +155,104 @@ def test_optimize_prompt_calls_native_planner_endpoint_only() -> None:
     assert b'"height"' not in requests[0].read()
 
 
+def test_capabilities_projects_only_safe_editing_states() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/capabilities"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        return httpx.Response(
+            200,
+            json={
+                "service": "image-platform",
+                "status": "phase2_durable_private",
+                "operation_states": [
+                    {
+                        "operation": operation,
+                        "declared": True,
+                        "configured": operation != "inpaint",
+                        "authorized": operation in {"edit", "image_ops"},
+                        "reason": (
+                            "service_not_configured"
+                            if operation == "inpaint"
+                            else "principal_not_permitted"
+                            if operation == "segment"
+                            else None
+                        ),
+                        "private_registry": "must not be exposed",
+                    }
+                    for operation in ("edit", "segment", "image_ops", "inpaint", "generate")
+                ],
+                "image_ops_contract": {"registered_fonts": ["private-font"]},
+                "transport_secret": "must not be exposed",
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").capabilities("access-secret")
+
+    assert result == {
+        "service": "image-platform",
+        "status": "phase2_durable_private",
+        "capabilities": [
+            {
+                "name": "image_to_image",
+                "operation": "edit",
+                "endpoint": "/v1/image-to-image",
+                "declared": True,
+                "configured": True,
+                "authorized": True,
+                "reason": None,
+            },
+            {
+                "name": "segmentation",
+                "operation": "segment",
+                "endpoint": "/v1/segmentations",
+                "declared": True,
+                "configured": True,
+                "authorized": False,
+                "reason": "principal_not_permitted",
+            },
+            {
+                "name": "image_operations",
+                "operation": "image_ops",
+                "endpoint": "/v1/image-operations",
+                "declared": True,
+                "configured": True,
+                "authorized": True,
+                "reason": None,
+            },
+            {
+                "name": "inpaint",
+                "operation": "inpaint",
+                "endpoint": "/v1/images/edits",
+                "declared": True,
+                "configured": False,
+                "authorized": False,
+                "reason": "service_not_configured",
+            },
+        ],
+    }
+
+
+def test_capabilities_fails_closed_when_an_editing_state_is_missing() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "service": "image-platform",
+                "status": "phase1_stateless",
+                "operation_states": [],
+            },
+            request=request,
+        )
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as http,
+        pytest.raises(ApiError, match="omitted an editing capability"),
+    ):
+        ImageApiClient(http, "https://api.example").capabilities("access-secret")
+
+
 def test_optimize_prompt_rejects_mismatched_effective_seed() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"prompt": "optimized", "seed": 8}, request=request)

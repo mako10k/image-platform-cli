@@ -111,3 +111,11 @@ def test_default_login_scopes_cover_batch_workflow() -> None:
         "campaigns:read",
         "jobs:cancel",
     } <= set(DEFAULT_LOGIN_SCOPES)
+
+
+def test_capabilities_surface_and_default_editing_scopes() -> None:
+    arguments = parser().parse_args(["capabilities", "--json"])
+
+    assert arguments.group == "capabilities"
+    assert arguments.json is True
+    assert {"images:edit", "images:understand"} <= set(DEFAULT_LOGIN_SCOPES)

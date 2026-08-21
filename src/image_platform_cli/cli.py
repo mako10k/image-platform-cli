@@ -24,6 +24,8 @@ DEFAULT_LOGIN_SCOPES = (
     "batches:execute",
     "campaigns:write",
     "jobs:cancel",
+    "images:edit",
+    "images:understand",
 )
 
 
@@ -108,6 +110,8 @@ def parser() -> argparse.ArgumentParser:
         parser_ = batch_commands.add_parser(command)
         parser_.add_argument("campaign_id")
         parser_.add_argument("--json", action="store_true")
+    capabilities = groups.add_parser("capabilities")
+    capabilities.add_argument("--json", action="store_true")
     return root
 
 
@@ -178,6 +182,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _emit(result, args.json)
             elif args.group == "batch":
                 _run_batch_command(args, service, ImageApiClient(http, config.api_base_url))
+            elif args.group == "capabilities":
+                access_token = service.access_token(frozenset())
+                result = ImageApiClient(http, config.api_base_url).capabilities(access_token)
+                _emit(result, args.json)
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),
