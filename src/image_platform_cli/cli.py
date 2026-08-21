@@ -33,6 +33,12 @@ def parser() -> argparse.ArgumentParser:
     generate.add_argument("--optimize", action="store_true")
     generate.add_argument("--wait", type=int, default=30)
     generate.add_argument("--allow-long-wait", action="store_true")
+    prompt = groups.add_parser("prompt")
+    prompt_commands = prompt.add_subparsers(dest="command", required=True)
+    optimize = prompt_commands.add_parser("optimize")
+    optimize.add_argument("prompt")
+    optimize.add_argument("--width", type=int)
+    optimize.add_argument("--height", type=int)
     return root
 
 
@@ -66,9 +72,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
                 print(f"SHA-256: {image.sha256}")
                 print(f"Seed: {image.seed}")
+            elif args.group == "prompt" and args.command == "optimize":
+                access_token = service.access_token(frozenset({"batches:plan"}))
+                optimized = ImageApiClient(http, config.api_base_url).optimize_prompt(
+                    access_token,
+                    prompt=args.prompt,
+                    width=args.width,
+                    height=args.height,
+                )
+                print(optimized)
             elif args.command == "login":
                 login_credential = service.login(
-                    tuple(args.scope or ["images:generate", "campaigns:read", "artifacts:read"]),
+                    tuple(
+                        args.scope
+                        or [
+                            "images:generate",
+                            "campaigns:read",
+                            "artifacts:read",
+                            "batches:plan",
+                        ]
+                    ),
                     _announce,
                 )
                 print(

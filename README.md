@@ -25,11 +25,17 @@ image auth status
 image auth logout
 image generate "a blue ceramic cup" --output cup.png [--width 1024] [--height 1024]
   [--wait 0..120] [--allow-long-wait]
+image prompt optimize "a blue ceramic cup" [--width 1024] [--height 1024]
 ```
 
 `login` performs the WorkOS Device Authorization Flow. It will fail closed when the platform has
 no usable OS credential-store backend. Its default application scopes are `images:generate`,
-`campaigns:read`, and `artifacts:read`.
+`campaigns:read`, `artifacts:read`, and `batches:plan`.
+
+`prompt optimize` sends only the user's query and optional bounded dimensions to the native
+`POST /v1/prompt-plans` endpoint and prints only the optimized prompt. The server owns the planning
+prompt, output schema, validation, and the replaceable provider call to `POST /v1/chat/completions`;
+the CLI never calls that provider-compatible endpoint directly.
 
 `generate` refreshes the session, validates the new access token, and submits one idempotent native
 generation Job. It waits up to 30 seconds by default, automatically polls any HTTP 202 response,

@@ -33,6 +33,41 @@ class ImageApiClient:
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
 
+    def optimize_prompt(
+        self,
+        access_token: str,
+        *,
+        prompt: str,
+        width: int | None = None,
+        height: int | None = None,
+    ) -> str:
+        """Request the server-owned Prompt Planner; never call its text provider directly."""
+
+        if not prompt.strip() or len(prompt) > 2048:
+            raise ApiError("prompt must contain 1 to 2048 non-whitespace characters")
+        for name, value in (("width", width), ("height", height)):
+            if value is not None and (value < 256 or value > 1024 or value % 64):
+                raise ApiError(f"{name} must be a multiple of 64 from 256 through 1024")
+        payload: dict[str, object] = {
+            "query": prompt,
+            "profile": "generation-standard",
+        }
+        if width is not None:
+            payload["width"] = width
+        if height is not None:
+            payload["height"] = height
+        try:
+            response = self._http.post(
+                f"{self._api_base_url}/v1/prompt-plans",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json=payload,
+            )
+        except httpx.HTTPError as error:
+            raise ApiError("image API request failed") from error
+        if not response.is_success:
+            raise ApiError(_safe_api_error(response))
+        return _required_string(_required_dict(response.json()), "prompt")
+
     def generate(
         self,
         access_token: str,

@@ -116,6 +116,31 @@ def test_generate_polls_and_downloads_without_leaking_oauth_token(tmp_path: Path
         save_image(image, output)
 
 
+def test_optimize_prompt_calls_native_planner_endpoint_only() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.path == "/v1/prompt-plans"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        return httpx.Response(
+            200,
+            json={"prompt": "a carefully composed blue cup"},
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        optimized = ImageApiClient(http, "https://api.example").optimize_prompt(
+            "access-secret", prompt="blue cup", width=512
+        )
+
+    assert optimized == "a carefully composed blue cup"
+    assert [request.url.path for request in requests] == ["/v1/prompt-plans"]
+    assert b'"query":"blue cup"' in requests[0].read()
+    assert b'"width":512' in requests[0].read()
+    assert b'"height"' not in requests[0].read()
+
+
 def test_generate_accepts_immediate_completed_artifact() -> None:
     data = png_header(256, 256)
 
