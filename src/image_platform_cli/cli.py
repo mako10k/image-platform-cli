@@ -156,6 +156,13 @@ def parser() -> argparse.ArgumentParser:
     )
     composite.add_argument("--opacity", type=Decimal, default=Decimal(1))
     composite.add_argument("--crop", type=_coordinates(4, "crop"))
+    inpaint = edit_commands.add_parser("inpaint")
+    inpaint.add_argument("prompt")
+    inpaint.add_argument("--input", type=Path, required=True)
+    inpaint.add_argument("--mask", type=Path, required=True)
+    inpaint.add_argument("--output", "-o", type=Path, required=True)
+    inpaint.add_argument("--profile", default="inpaint-stable-diffusion-v1-5")
+    inpaint.add_argument("--seed", type=int)
     return root
 
 
@@ -309,7 +316,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     print(f"Saved {segmented.width}x{segmented.height} segmentation outputs.")
                     print(f"Mask SHA-256: {segmented.mask_sha256}")
-                else:
+                elif args.command == "composite":
                     require_available_output(args.output)
                     composite_result = api.composite(
                         service.access_token(frozenset({"images:edit"})),
@@ -327,6 +334,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     print(f"SHA-256: {composite_result.sha256}")
                     print(f"Program SHA-256: {composite_result.program_sha256}")
+                else:
+                    require_available_output(args.output)
+                    inpainted = api.inpaint(
+                        service.access_token(frozenset({"images:edit"})),
+                        prompt=args.prompt,
+                        input_path=args.input,
+                        mask_path=args.mask,
+                        profile=args.profile,
+                        seed=args.seed,
+                    )
+                    save_image(inpainted, args.output)
+                    print(f"Saved {inpainted.width}x{inpainted.height} PNG to {args.output}.")
+                    print(f"SHA-256: {inpainted.sha256}")
+                    print(f"Seed: {inpainted.seed}")
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),

@@ -25,6 +25,10 @@ MAX_PAGE_SIZE = 100
 MAX_ARTIFACT_DOWNLOAD_BYTES = 100 * 1024 * 1024
 MAX_EDIT_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_EDIT_PIXELS = 4_194_304
+MAX_STABILITY_SEED = 4_294_967_294
+INPAINT_PROFILE = "inpaint-stable-diffusion-v1-5"
+INPAINT_MODEL = "stable-diffusion-v1-5/stable-diffusion-inpainting"
+INPAINT_MODEL_REVISION = "8a4288a76071f7280aedbdb3253bdb9e9d5d84bb"
 _SENSITIVE_RESPONSE_KEYS = frozenset(
     {"url", "signed_url", "object_key", "staging_key", "query", "upload"}
 )
@@ -319,6 +323,78 @@ class ImageApiClient:
             width,
             height,
             _required_string(receipt, "program_sha256"),
+        )
+
+    def inpaint(
+        self,
+        access_token: str,
+        *,
+        prompt: str,
+        input_path: Path,
+        mask_path: Path,
+        profile: str,
+        seed: int | None,
+    ) -> GeneratedImage:
+        image, image_mime, width, height = _read_edit_input(input_path)
+        mask, mask_mime, mask_width, mask_height = _read_edit_input(mask_path)
+        if profile != INPAINT_PROFILE:
+            raise ApiError("unknown inpaint profile")
+        if not prompt.strip() or len(prompt) > 2048:
+            raise ApiError("prompt must contain 1 to 2048 non-whitespace characters")
+        if (width, height) != (mask_width, mask_height):
+            raise ApiError("inpaint image and mask dimensions must match")
+        if len(image) + len(mask) > MAX_EDIT_IMAGE_BYTES:
+            raise ApiError("combined inpaint image and mask must contain at most 10 MiB")
+        if seed is None:
+            effective_seed = secrets.randbelow(MAX_STABILITY_SEED) + 1
+        elif isinstance(seed, bool) or seed < 0 or seed > MAX_STABILITY_SEED:
+            raise ApiError(f"seed must be from 0 through {MAX_STABILITY_SEED}")
+        else:
+            effective_seed = seed
+        try:
+            response = self._http.post(
+                f"{self._api_base_url}/v2beta/stable-image/edit/inpaint",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "image/*",
+                },
+                files={
+                    "image": (input_path.name, image, image_mime),
+                    "mask": (mask_path.name, mask, mask_mime),
+                },
+                data={
+                    "prompt": prompt,
+                    "grow_mask": "0",
+                    "seed": str(effective_seed),
+                    "output_format": "png",
+                },
+            )
+        except httpx.HTTPError as error:
+            raise ApiError("image API request failed") from error
+        if not response.is_success:
+            raise ApiError(_safe_api_error(response))
+        returned_seed = _required_header_int(response, "Seed")
+        if effective_seed != 0 and returned_seed != effective_seed:
+            raise ApiError("image API returned an unexpected inpaint seed")
+        digest = hashlib.sha256(response.content).hexdigest()
+        try:
+            output_width, output_height = _png_dimensions(response.content)
+        except ApiError as error:
+            raise ApiError("image API response integrity check failed") from error
+        if (
+            response.headers.get("Content-Type", "").split(";", 1)[0] != "image/png"
+            or response.headers.get("X-Image-SHA256") != digest
+            or response.headers.get("X-Image-Native-SHA256") != digest
+            or response.headers.get("X-Image-Backend-Profile") != profile
+            or response.headers.get("X-Image-Backend-Model") != INPAINT_MODEL
+            or response.headers.get("X-Image-Backend-Revision") != INPAINT_MODEL_REVISION
+            or _required_header_int(response, "X-Image-Width") != output_width
+            or _required_header_int(response, "X-Image-Height") != output_height
+            or (output_width, output_height) != (width, height)
+        ):
+            raise ApiError("image API response integrity check failed")
+        return GeneratedImage(
+            response.content, "image/png", digest, output_width, output_height, returned_seed
         )
 
     def list_jobs(
@@ -1225,6 +1301,17 @@ def _required_decimal(body: dict[str, Any], name: str) -> Decimal:
         raise ApiError("image API returned a malformed response") from error
     if not parsed.is_finite():
         raise ApiError("image API returned a malformed response")
+    return parsed
+
+
+def _required_header_int(response: httpx.Response, name: str) -> int:
+    value = response.headers.get(name)
+    try:
+        parsed = int(value) if value is not None else -1
+    except ValueError as error:
+        raise ApiError("image API returned malformed image headers") from error
+    if parsed < 0:
+        raise ApiError("image API returned malformed image headers")
     return parsed
 
 

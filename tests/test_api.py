@@ -433,6 +433,83 @@ def test_composite_uses_native_image_operations_and_verifies_receipt(tmp_path: P
     assert edited.program_sha256 == "a" * 64
 
 
+def test_inpaint_uses_explicit_mask_route_and_verifies_model_headers(tmp_path: Path) -> None:
+    source = valid_png(256, 256)
+    mask_buffer = BytesIO()
+    Image.new("L", (256, 256), 255).save(mask_buffer, format="PNG")
+    mask = mask_buffer.getvalue()
+    result = valid_png(256, 256)
+    input_path = tmp_path / "scene.png"
+    mask_path = tmp_path / "mask.png"
+    input_path.write_bytes(source)
+    mask_path.write_bytes(mask)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = request.read()
+        assert request.url.path == "/v2beta/stable-image/edit/inpaint"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        assert b'name="image"' in payload and b'name="mask"' in payload
+        assert b'name="grow_mask"' in payload and b"\r\n\r\n0\r\n" in payload
+        assert b'name="seed"' in payload and b"\r\n\r\n42\r\n" in payload
+        digest = hashlib.sha256(result).hexdigest()
+        return httpx.Response(
+            200,
+            content=result,
+            headers={
+                "Content-Type": "image/png",
+                "Seed": "42",
+                "X-Image-SHA256": digest,
+                "X-Image-Native-SHA256": digest,
+                "X-Image-Backend-Profile": "inpaint-stable-diffusion-v1-5",
+                "X-Image-Backend-Model": "stable-diffusion-v1-5/stable-diffusion-inpainting",
+                "X-Image-Backend-Revision": "8a4288a76071f7280aedbdb3253bdb9e9d5d84bb",
+                "X-Image-Width": "256",
+                "X-Image-Height": "256",
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        image = ImageApiClient(http, "https://api.example").inpaint(
+            "access-secret",
+            prompt="remove the object",
+            input_path=input_path,
+            mask_path=mask_path,
+            profile="inpaint-stable-diffusion-v1-5",
+            seed=42,
+        )
+
+    assert image.data == result and image.seed == 42
+    assert image.sha256 == hashlib.sha256(result).hexdigest()
+
+
+def test_inpaint_rejects_mismatched_mask_before_request(tmp_path: Path) -> None:
+    input_path = tmp_path / "scene.png"
+    mask_path = tmp_path / "mask.png"
+    input_path.write_bytes(valid_png(256, 256))
+    mask_path.write_bytes(valid_png(512, 512))
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(500, request=request)
+
+    with (
+        httpx.Client(transport=httpx.MockTransport(handler)) as http,
+        pytest.raises(ApiError, match="dimensions must match"),
+    ):
+        ImageApiClient(http, "https://api.example").inpaint(
+            "access-secret",
+            prompt="remove the object",
+            input_path=input_path,
+            mask_path=mask_path,
+            profile="inpaint-stable-diffusion-v1-5",
+            seed=42,
+        )
+
+    assert requests == []
+
+
 def test_capabilities_projects_only_safe_editing_states() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/v1/capabilities"

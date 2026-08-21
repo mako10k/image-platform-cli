@@ -234,3 +234,30 @@ def test_composite_surface_exposes_crop_affine_alpha_and_mask() -> None:
     assert arguments.opacity == Decimal("0.8")
     assert arguments.crop == (0, 0, 512, 512)
     assert arguments.output == Path("composite.png")
+
+
+def test_inpaint_surface_requires_explicit_mask_and_exposes_seed_profile() -> None:
+    arguments = parser().parse_args(
+        [
+            "edit",
+            "inpaint",
+            "remove the object",
+            "--input",
+            "scene.png",
+            "--mask",
+            "mask.png",
+            "--output",
+            "repaired.png",
+            "--profile",
+            "inpaint-stable-diffusion-v1-5",
+            "--seed",
+            "42",
+        ]
+    )
+
+    assert arguments.group == "edit" and arguments.command == "inpaint"
+    assert arguments.prompt == "remove the object"
+    assert arguments.input == Path("scene.png") and arguments.mask == Path("mask.png")
+    assert arguments.output == Path("repaired.png")
+    assert arguments.profile == "inpaint-stable-diffusion-v1-5"
+    assert arguments.seed == 42
