@@ -4,12 +4,14 @@ import re
 import secrets
 import time
 from collections.abc import Callable, Mapping, Sequence
+from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urljoin, urlsplit
 from uuid import uuid4
 
 import httpx
+from PIL import Image, UnidentifiedImageError
 
 from .errors import ApiError
 from .models import GeneratedImage
@@ -486,11 +488,21 @@ def _verify_artifact(
         return
     if not isinstance(width, int) or not isinstance(height, int) or isinstance(width, bool):
         raise ApiError("image API returned malformed Artifact metadata")
-    if expected_mime == "image/png":
-        dimensions = _png_dimensions(data)
-    else:
+    expected_format = {
+        "image/png": "PNG",
+        "image/jpeg": "JPEG",
+        "image/webp": "WEBP",
+    }.get(expected_mime)
+    if expected_format is None:
         raise ApiError("Artifact image MIME type cannot be verified")
-    if dimensions != (width, height):
+    try:
+        with Image.open(BytesIO(data)) as image:
+            actual_format = image.format
+            dimensions = image.size
+            image.verify()
+    except (OSError, UnidentifiedImageError) as error:
+        raise ApiError("Artifact download integrity check failed") from error
+    if actual_format != expected_format or dimensions != (width, height):
         raise ApiError("Artifact download integrity check failed")
 
 

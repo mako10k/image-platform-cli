@@ -1,8 +1,10 @@
 import hashlib
+from io import BytesIO
 from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image
 
 from image_platform_cli.api import (
     ImageApiClient,
@@ -23,6 +25,12 @@ def png_header(width: int, height: int) -> bytes:
         + b"\x00" * 8
         + b"IEND\xaeB`\x82"
     )
+
+
+def valid_png(width: int, height: int) -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (width, height), "navy").save(output, format="PNG")
+    return output.getvalue()
 
 
 def artifact(data: bytes) -> dict[str, object]:
@@ -344,7 +352,7 @@ def test_artifact_show_removes_signed_url_and_private_fields() -> None:
 
 
 def test_artifact_download_preflights_and_does_not_forward_oauth(tmp_path: Path) -> None:
-    data = png_header(256, 256)
+    data = valid_png(256, 256)
     output = tmp_path / "artifact.png"
     requests: list[httpx.Request] = []
 
@@ -379,7 +387,7 @@ def test_artifact_download_preflights_and_does_not_forward_oauth(tmp_path: Path)
 
 
 def test_artifact_download_rejects_integrity_mismatch_without_output(tmp_path: Path) -> None:
-    data = png_header(256, 256)
+    data = valid_png(256, 256)
     output = tmp_path / "artifact.png"
 
     def handler(request: httpx.Request) -> httpx.Response:
