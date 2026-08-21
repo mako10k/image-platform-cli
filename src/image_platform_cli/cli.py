@@ -31,6 +31,8 @@ def parser() -> argparse.ArgumentParser:
     generate.add_argument("--height", type=int, default=1024)
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument("--optimize", action="store_true")
+    generate.add_argument("--wait", type=int, default=30)
+    generate.add_argument("--allow-long-wait", action="store_true")
     return root
 
 
@@ -46,7 +48,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 KeyringCredentialStore(),
             )
             if args.group == "generate":
-                access_token = service.access_token(frozenset({"images:generate"}))
+                access_token = service.access_token(
+                    frozenset({"images:generate", "campaigns:read", "artifacts:read"})
+                )
                 image = ImageApiClient(http, config.api_base_url).generate(
                     access_token,
                     prompt=args.prompt,
@@ -54,14 +58,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     height=args.height,
                     seed=args.seed,
                     optimize=args.optimize,
+                    wait_seconds=args.wait,
+                    allow_long_wait=args.allow_long_wait,
                 )
                 save_image(image, args.output)
                 print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
                 print(f"SHA-256: {image.sha256}")
-                print(f"Model: {image.model_id}@{image.model_revision}")
             elif args.command == "login":
                 login_credential = service.login(
-                    tuple(args.scope or ["images:generate"]), _announce
+                    tuple(args.scope or ["images:generate", "campaigns:read", "artifacts:read"]),
+                    _announce,
                 )
                 print(
                     f"Logged in as {login_credential.subject} for organization "

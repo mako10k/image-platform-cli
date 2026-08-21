@@ -41,5 +41,3 @@ class GeneratedImage:
     sha256: str
     width: int
     height: int
-    model_id: str
-    model_revision: str
