@@ -51,3 +51,13 @@ class SegmentationResult:
     mask_sha256: str
     width: int
     height: int
+
+
+@dataclass(frozen=True, slots=True)
+class DeterministicEditResult:
+    data: bytes = field(repr=False)
+    mime_type: str
+    sha256: str
+    width: int
+    height: int
+    program_sha256: str

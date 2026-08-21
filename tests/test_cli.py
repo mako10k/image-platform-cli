@@ -202,3 +202,35 @@ def test_segment_surface_supports_text_point_box_and_explicit_outputs() -> None:
     assert points.foreground_output == Path("foreground.png")
     assert box.box == (1, 2, 100, 200)
     assert box.background_output == Path("background.png")
+
+
+def test_composite_surface_exposes_crop_affine_alpha_and_mask() -> None:
+    arguments = parser().parse_args(
+        [
+            "edit",
+            "composite",
+            "--background",
+            "background.png",
+            "--overlay",
+            "foreground.png",
+            "--mask",
+            "mask.png",
+            "--matrix",
+            "1,0,0,1,20,30",
+            "--opacity",
+            "0.8",
+            "--crop",
+            "0,0,512,512",
+            "--output",
+            "composite.png",
+        ]
+    )
+
+    assert arguments.group == "edit" and arguments.command == "composite"
+    assert arguments.background == Path("background.png")
+    assert arguments.overlay == Path("foreground.png")
+    assert arguments.mask == Path("mask.png")
+    assert arguments.matrix == tuple(Decimal(value) for value in (1, 0, 0, 1, 20, 30))
+    assert arguments.opacity == Decimal("0.8")
+    assert arguments.crop == (0, 0, 512, 512)
+    assert arguments.output == Path("composite.png")

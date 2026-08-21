@@ -360,6 +360,79 @@ def test_segmentation_writes_mask_foreground_and_background(tmp_path: Path) -> N
         assert background.getchannel("A").getextrema() == (0, 0)
 
 
+def test_composite_uses_native_image_operations_and_verifies_receipt(tmp_path: Path) -> None:
+    background = valid_png(256, 256)
+    overlay = valid_png(128, 128)
+    mask_buffer = BytesIO()
+    Image.new("L", (256, 256), 255).save(mask_buffer, format="PNG")
+    mask = mask_buffer.getvalue()
+    result = valid_png(200, 220)
+    background_path = tmp_path / "background.png"
+    overlay_path = tmp_path / "overlay.png"
+    mask_path = tmp_path / "mask.png"
+    background_path.write_bytes(background)
+    overlay_path.write_bytes(overlay)
+    mask_path.write_bytes(mask)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = request.read().decode()
+        assert request.url.path == "/v1/image-operations"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        assert '"source_input":"background"' in payload
+        assert '"op":"paste_image"' in payload
+        assert '"kind":"mask_input","input":"mask"' in payload
+        assert '"transform":{"a":"1","b":"0","c":"0","d":"1","e":"20","f":"30"}' in payload
+        assert '"op":"crop"' in payload
+        image_metadata = {
+            "sha256": hashlib.sha256(result).hexdigest(),
+            "mime_type": "image/png",
+            "size_bytes": len(result),
+            "width": 200,
+            "height": 220,
+        }
+        return httpx.Response(
+            200,
+            json={
+                "image": image_metadata,
+                "data_base64": base64.b64encode(result).decode("ascii"),
+                "receipt": {
+                    "contract_revision": "deterministic-edit-v1",
+                    "program_sha256": "a" * 64,
+                    "input_sha256s": {
+                        "background": hashlib.sha256(background).hexdigest(),
+                        "overlay": hashlib.sha256(overlay).hexdigest(),
+                        "mask": hashlib.sha256(mask).hexdigest(),
+                    },
+                    "commands": [
+                        {"id": "place-overlay", "op": "paste_image"},
+                        {"id": "crop-result", "op": "crop"},
+                    ],
+                    "output_sha256": hashlib.sha256(result).hexdigest(),
+                    "output_width": 200,
+                    "output_height": 220,
+                },
+                "estimated_cost_usd": "0",
+                "actual_cost_usd": "0",
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        edited = ImageApiClient(http, "https://api.example").composite(
+            "access-secret",
+            background_path=background_path,
+            overlay_path=overlay_path,
+            mask_path=mask_path,
+            transform=(Decimal(1), Decimal(0), Decimal(0), Decimal(1), Decimal(20), Decimal(30)),
+            opacity=Decimal("0.8"),
+            crop=(0, 0, 200, 220),
+        )
+
+    assert edited.data == result
+    assert edited.sha256 == hashlib.sha256(result).hexdigest()
+    assert edited.program_sha256 == "a" * 64
+
+
 def test_capabilities_projects_only_safe_editing_states() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/v1/capabilities"

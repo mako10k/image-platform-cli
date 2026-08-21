@@ -8,7 +8,13 @@ from pathlib import Path
 
 import httpx
 
-from .api import ImageApiClient, require_available_output, save_image, save_segmentation_outputs
+from .api import (
+    ImageApiClient,
+    require_available_output,
+    save_deterministic_edit,
+    save_image,
+    save_segmentation_outputs,
+)
 from .config import Config
 from .credentials import KeyringCredentialStore
 from .errors import CliError
@@ -138,6 +144,18 @@ def parser() -> argparse.ArgumentParser:
     segment.add_argument("--mask-output", type=Path)
     segment.add_argument("--foreground-output", type=Path)
     segment.add_argument("--background-output", type=Path)
+    composite = edit_commands.add_parser("composite")
+    composite.add_argument("--background", type=Path, required=True)
+    composite.add_argument("--overlay", type=Path, required=True)
+    composite.add_argument("--mask", type=Path)
+    composite.add_argument("--output", "-o", type=Path, required=True)
+    composite.add_argument(
+        "--matrix",
+        type=_decimals(6, "matrix"),
+        default=(Decimal(1), Decimal(0), Decimal(0), Decimal(1), Decimal(0), Decimal(0)),
+    )
+    composite.add_argument("--opacity", type=Decimal, default=Decimal(1))
+    composite.add_argument("--crop", type=_coordinates(4, "crop"))
     return root
 
 
@@ -162,6 +180,21 @@ def _coordinates(count: int, name: str) -> Callable[[str], tuple[int, ...]]:
         if len(coordinates) != count:
             raise argparse.ArgumentTypeError(f"{name} requires {count} comma-separated integers")
         return coordinates
+
+    return parse
+
+
+def _decimals(count: int, name: str) -> Callable[[str], tuple[Decimal, ...]]:
+    def parse(value: str) -> tuple[Decimal, ...]:
+        try:
+            values = tuple(Decimal(part) for part in value.split(","))
+        except Exception as error:
+            raise argparse.ArgumentTypeError(
+                f"{name} must contain comma-separated decimals"
+            ) from error
+        if len(values) != count:
+            raise argparse.ArgumentTypeError(f"{name} requires {count} comma-separated decimals")
+        return values
 
     return parse
 
@@ -248,7 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
                     print(f"SHA-256: {image.sha256}")
                     print(f"Seed: {image.seed}")
-                else:
+                elif args.command == "segment":
                     outputs = (args.mask_output, args.foreground_output, args.background_output)
                     selected_outputs = tuple(output for output in outputs if output is not None)
                     if not selected_outputs:
@@ -276,6 +309,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     print(f"Saved {segmented.width}x{segmented.height} segmentation outputs.")
                     print(f"Mask SHA-256: {segmented.mask_sha256}")
+                else:
+                    require_available_output(args.output)
+                    composite_result = api.composite(
+                        service.access_token(frozenset({"images:edit"})),
+                        background_path=args.background,
+                        overlay_path=args.overlay,
+                        mask_path=args.mask,
+                        transform=tuple(args.matrix),
+                        opacity=args.opacity,
+                        crop=tuple(args.crop) if args.crop is not None else None,
+                    )
+                    save_deterministic_edit(composite_result, args.output)
+                    print(
+                        f"Saved {composite_result.width}x{composite_result.height} PNG "
+                        f"to {args.output}."
+                    )
+                    print(f"SHA-256: {composite_result.sha256}")
+                    print(f"Program SHA-256: {composite_result.program_sha256}")
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),

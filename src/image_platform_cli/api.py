@@ -17,7 +17,7 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 
 from .errors import ApiError
-from .models import GeneratedImage, SegmentationResult
+from .models import DeterministicEditResult, GeneratedImage, SegmentationResult
 
 TERMINAL_FAILURES = frozenset({"failed", "partial", "cancelled"})
 TERMINAL_CAMPAIGN_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
@@ -215,6 +215,111 @@ class ImageApiClient:
         ):
             raise ApiError("image API returned inconsistent segmentation receipt")
         return SegmentationResult(source, mask, digest, width, height)
+
+    def composite(
+        self,
+        access_token: str,
+        *,
+        background_path: Path,
+        overlay_path: Path,
+        mask_path: Path | None,
+        transform: tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal],
+        opacity: Decimal,
+        crop: tuple[int, int, int, int] | None,
+    ) -> DeterministicEditResult:
+        background, background_mime, _, _ = _read_edit_input(background_path)
+        overlay, overlay_mime, _, _ = _read_edit_input(overlay_path)
+        mask_input = _read_edit_input(mask_path) if mask_path is not None else None
+        _validate_composite_controls(transform, opacity, crop)
+        inputs: dict[str, object] = {
+            "background": _inline_image(background, background_mime),
+            "overlay": _inline_image(overlay, overlay_mime),
+        }
+        input_kinds = {"background": "image", "overlay": "image"}
+        input_hashes = {
+            "background": hashlib.sha256(background).hexdigest(),
+            "overlay": hashlib.sha256(overlay).hexdigest(),
+        }
+        coverage: dict[str, object] | None = None
+        if mask_input is not None:
+            mask, mask_mime, _, _ = mask_input
+            inputs["mask"] = _inline_image(mask, mask_mime)
+            input_kinds["mask"] = "mask"
+            input_hashes["mask"] = hashlib.sha256(mask).hexdigest()
+            coverage = {"base": {"source": {"kind": "mask_input", "input": "mask"}}}
+        commands: list[dict[str, object]] = [
+            {
+                "id": "place-overlay",
+                "op": "paste_image",
+                "input": "overlay",
+                "transform": dict(
+                    zip(("a", "b", "c", "d", "e", "f"), map(str, transform), strict=True)
+                ),
+                "opacity": str(opacity),
+                **({"coverage": coverage} if coverage is not None else {}),
+            }
+        ]
+        if crop is not None:
+            x, y, width, height = crop
+            commands.append(
+                {
+                    "id": "crop-result",
+                    "op": "crop",
+                    "rect": {"x": x, "y": y, "width": width, "height": height},
+                }
+            )
+        body = self._request_json(
+            "POST",
+            "/v1/image-operations",
+            access_token,
+            json={
+                "inputs": inputs,
+                "program": {
+                    "revision": "deterministic-edit-v1",
+                    "inputs": input_kinds,
+                    "source_input": "background",
+                    "commands": commands,
+                    "encoding": {"format": "png"},
+                },
+                "response_format": "base64",
+            },
+        )
+        metadata = _required_dict(body.get("image"))
+        try:
+            data = base64.b64decode(_required_string(body, "data_base64"), validate=True)
+        except (ValueError, binascii.Error) as error:
+            raise ApiError("image API returned invalid composite Base64") from error
+        digest, width, height = _verified_png(data, metadata)
+        receipt = _required_dict(body.get("receipt"))
+        receipt_inputs = _required_dict(receipt.get("input_sha256s"))
+        receipt_commands = receipt.get("commands")
+        expected_commands = [(command["id"], command["op"]) for command in commands]
+        if not isinstance(receipt_commands, list):
+            raise ApiError("image API returned malformed composite receipt")
+        actual_commands = [
+            (
+                _required_string(_required_dict(item), "id"),
+                _required_string(_required_dict(item), "op"),
+            )
+            for item in receipt_commands
+        ]
+        if (
+            _required_string(receipt, "contract_revision") != "deterministic-edit-v1"
+            or receipt_inputs != input_hashes
+            or actual_commands != expected_commands
+            or _required_string(receipt, "output_sha256") != digest
+            or _required_int(receipt, "output_width") != width
+            or _required_int(receipt, "output_height") != height
+        ):
+            raise ApiError("image API returned inconsistent composite receipt")
+        return DeterministicEditResult(
+            data,
+            "image/png",
+            digest,
+            width,
+            height,
+            _required_string(receipt, "program_sha256"),
+        )
 
     def list_jobs(
         self,
@@ -778,6 +883,32 @@ def _validate_segment_selector(
         x_min, y_min, x_max, y_max = box
         if not (0 <= x_min < x_max <= width and 0 <= y_min < y_max <= height):
             raise ApiError("segmentation box is outside input bounds")
+
+
+def _inline_image(data: bytes, mime_type: str) -> dict[str, str]:
+    return {"mime_type": mime_type, "data_base64": base64.b64encode(data).decode("ascii")}
+
+
+def _validate_composite_controls(
+    transform: Sequence[Decimal], opacity: Decimal, crop: tuple[int, int, int, int] | None
+) -> None:
+    if len(transform) != 6 or any(
+        not value.is_finite() or value < -65_536 or value > 65_536 for value in transform
+    ):
+        raise ApiError("matrix values must be finite decimals from -65536 through 65536")
+    if not opacity.is_finite() or opacity < 0 or opacity > 1:
+        raise ApiError("opacity must be from 0 through 1")
+    if crop is not None:
+        x, y, width, height = crop
+        if any(value < -1_000_000 or value > 1_000_000 for value in (x, y)):
+            raise ApiError("crop origin is outside the supported range")
+        if width < 1 or height < 1 or width > 8_192 or height > 8_192:
+            raise ApiError("crop dimensions must be from 1 through 8192")
+
+
+def save_deterministic_edit(result: DeterministicEditResult, output: Path) -> None:
+    require_available_output(output)
+    _save_bytes_exclusive(result.data, output)
 
 
 def _validate_image_to_image_controls(
