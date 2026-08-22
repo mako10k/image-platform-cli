@@ -90,6 +90,16 @@ coverage remain the original base pixels. Both commands support `--dry-run`, and
 examples are available through `image help edit replace-object` and
 `image help edit replace-background`.
 
+`image edit raster` adds discoverable CPU-only recipes. `crop` uses an exact pixel rectangle,
+`filter` exposes Gaussian blur, box blur, and unsharp mask, and `adjust` composes hue/saturation,
+white balance, exposure, brightness, and contrast in a stable order. `auto-crop` uses an explicit
+mask, `shape` draws bounded rectangles or ellipses, and `color-match` uses an explicit reference.
+`text` requires an administrator-registered font ID and its exact SHA-256 rather than accepting an
+arbitrary font path.
+`resize --fit`, `flip`, right-angle `rotate`, and `canvas` compile exact affine matrices after
+reading only the source dimensions locally. Each child supports `--dry-run` and has examples under
+`image help edit raster CHILD`.
+
 Run `./scripts/static-checks.sh` before committing. In addition to Ruff and strict mypy, it rejects
 cyclomatic-complexity regressions through Xenon and clone-code blocks of eight or more similar
 lines through Pylint. CI runs the same locked checks and the complete test suite.

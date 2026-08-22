@@ -2,6 +2,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from image_platform_cli.cli import DEFAULT_LOGIN_SCOPES, _show_help, main, parser
 
@@ -96,6 +97,86 @@ def test_replace_background_dry_run_inverts_foreground_mask(
 
     assert result == 0
     assert '"op":"invert"' in capsys.readouterr().out
+
+
+def test_raster_adjust_dry_run_composes_stable_command_order(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "edit",
+            "raster",
+            "adjust",
+            "--input",
+            "scene.png",
+            "--hue",
+            "15",
+            "--temperature",
+            "6500",
+            "--contrast",
+            "1.1",
+            "--dry-run",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert output.index('"op":"hue_saturation"') < output.index('"op":"white_balance"')
+    assert output.index('"op":"white_balance"') < output.index('"op":"tone"')
+
+
+def test_raster_resize_fit_dry_run_resolves_exact_affine(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source.png"
+    Image.new("RGB", (400, 200)).save(source)
+
+    result = main(
+        [
+            "edit",
+            "raster",
+            "resize",
+            "--input",
+            str(source),
+            "--width",
+            "300",
+            "--height",
+            "300",
+            "--fit",
+            "--dry-run",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert '"a":"0.75"' in output and '"d":"0.75"' in output
+    assert '"f":"75.00"' in output
+    assert '"output_width":300' in output and '"output_height":300' in output
+
+
+def test_raster_rotate_dry_run_swaps_canvas_dimensions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source.png"
+    Image.new("RGB", (320, 180)).save(source)
+
+    assert (
+        main(
+            [
+                "edit",
+                "raster",
+                "rotate",
+                "--input",
+                str(source),
+                "--degrees",
+                "90",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert '"output_width":180' in output and '"output_height":320' in output
 
 
 def test_explicit_seed_is_preserved_by_parser() -> None:

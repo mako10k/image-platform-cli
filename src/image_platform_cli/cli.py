@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import sys
 import webbrowser
 from collections.abc import Callable, Sequence
@@ -7,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import httpx
+from PIL import Image, UnidentifiedImageError
 
 from .api import (
     ImageApiClient,
@@ -57,6 +59,24 @@ HELP_GUIDANCE = {
         "Invert one foreground mask and replace only its background coverage.",
         (
             "image edit replace-background --base scene.png --replacement bg.png --mask foreground.png --feather 2 -o result.png",
+        ),
+    ),
+    ("edit", "raster"): (
+        "Build deterministic CPU raster recipes; inspect a child topic for exact controls.",
+        ("image help edit raster crop", "image help edit raster adjust"),
+    ),
+    ("edit", "raster", "crop"): (
+        "Crop with an exact top-left-origin x,y,width,height rectangle.",
+        ("image edit raster crop --input scene.png --rect 10,20,512,512 -o crop.png",),
+    ),
+    ("edit", "raster", "filter"): (
+        "Apply a bounded deterministic blur or unsharp-mask filter.",
+        ("image edit raster filter --input scene.png --kind gaussian_blur --radius 2 -o blur.png",),
+    ),
+    ("edit", "raster", "adjust"): (
+        "Compose hue/saturation, white-balance, and tone commands in stable order.",
+        (
+            "image edit raster adjust --input scene.png --hue 15 --saturation 1.1 --contrast 1.05 -o adjusted.png",
         ),
     ),
 }
@@ -215,6 +235,82 @@ def parser() -> argparse.ArgumentParser:
         replacement.add_argument("--feather", type=Decimal)
         replacement.add_argument("--output", "-o", type=Path)
         replacement.add_argument("--dry-run", action="store_true")
+    raster = edit_commands.add_parser("raster")
+    raster_commands = raster.add_subparsers(dest="raster_command", required=True)
+    raster_crop = raster_commands.add_parser("crop")
+    raster_crop.add_argument("--rect", type=_coordinates(4, "rect"), required=True)
+    raster_filter = raster_commands.add_parser("filter")
+    raster_filter.add_argument(
+        "--kind", choices=("gaussian_blur", "box_blur", "unsharp_mask"), required=True
+    )
+    raster_filter.add_argument("--radius", type=Decimal, required=True)
+    raster_filter.add_argument("--amount", type=Decimal, default=Decimal(1))
+    raster_adjust = raster_commands.add_parser("adjust")
+    raster_adjust.add_argument("--hue", type=Decimal)
+    raster_adjust.add_argument("--saturation", type=Decimal)
+    raster_adjust.add_argument("--temperature", type=int)
+    raster_adjust.add_argument("--tint", type=Decimal, default=Decimal(0))
+    raster_adjust.add_argument("--exposure", type=Decimal)
+    raster_adjust.add_argument("--brightness", type=Decimal)
+    raster_adjust.add_argument("--contrast", type=Decimal)
+    raster_auto_crop = raster_commands.add_parser("auto-crop")
+    raster_auto_crop.add_argument("--mask", type=Path, required=True)
+    raster_auto_crop.add_argument("--threshold", type=Decimal, default=Decimal("0.01"))
+    raster_auto_crop.add_argument("--padding", type=int, default=0)
+    raster_shape = raster_commands.add_parser("shape")
+    raster_shape.add_argument("--kind", choices=("rectangle", "ellipse"), required=True)
+    raster_shape.add_argument("--rect", type=_coordinates(4, "rect"), required=True)
+    raster_shape.add_argument("--fill", type=_rgba)
+    raster_shape.add_argument("--stroke", type=_rgba)
+    raster_shape.add_argument("--stroke-width", type=int, default=1)
+    raster_text = raster_commands.add_parser("text")
+    raster_text.add_argument("text")
+    raster_text.add_argument("--position", type=_coordinates(2, "position"), required=True)
+    raster_text.add_argument("--font-id", required=True)
+    raster_text.add_argument("--font-sha256", required=True)
+    raster_text.add_argument("--font-size", type=int, required=True)
+    raster_text.add_argument("--fill", type=_rgba, required=True)
+    raster_text.add_argument("--stroke", type=_rgba)
+    raster_text.add_argument("--stroke-width", type=int, default=0)
+    raster_color_match = raster_commands.add_parser("color-match")
+    raster_color_match.add_argument("--reference", type=Path, required=True)
+    raster_color_match.add_argument(
+        "--algorithm",
+        choices=("lab_mean_std_v1", "lab_histogram_256_v1"),
+        default="lab_mean_std_v1",
+    )
+    raster_color_match.add_argument("--strength", type=Decimal, default=Decimal(1))
+    raster_color_match.add_argument("--preserve-luminance", action="store_true")
+    raster_resize = raster_commands.add_parser("resize")
+    raster_resize.add_argument("--width", type=int, required=True)
+    raster_resize.add_argument("--height", type=int, required=True)
+    raster_resize.add_argument("--fit", action="store_true", help="contain within a canvas")
+    raster_flip = raster_commands.add_parser("flip")
+    raster_flip.add_argument("--axis", choices=("horizontal", "vertical"), required=True)
+    raster_rotate = raster_commands.add_parser("rotate")
+    raster_rotate.add_argument("--degrees", type=int, choices=(90, 180, 270), required=True)
+    raster_canvas = raster_commands.add_parser("canvas")
+    raster_canvas.add_argument("--width", type=int, required=True)
+    raster_canvas.add_argument("--height", type=int, required=True)
+    raster_canvas.add_argument("--x", type=int, default=0)
+    raster_canvas.add_argument("--y", type=int, default=0)
+    raster_canvas.add_argument("--background", type=_rgba, default={"r": 0, "g": 0, "b": 0, "a": 0})
+    for raster_command in (
+        raster_crop,
+        raster_filter,
+        raster_adjust,
+        raster_auto_crop,
+        raster_shape,
+        raster_text,
+        raster_color_match,
+        raster_resize,
+        raster_flip,
+        raster_rotate,
+        raster_canvas,
+    ):
+        raster_command.add_argument("--input", type=Path, required=True)
+        raster_command.add_argument("--output", "-o", type=Path)
+        raster_command.add_argument("--dry-run", action="store_true")
     inpaint = edit_commands.add_parser("inpaint")
     inpaint.add_argument("prompt")
     inpaint.add_argument("--input", type=Path, required=True)
@@ -268,6 +364,13 @@ def _decimals(count: int, name: str) -> Callable[[str], tuple[Decimal, ...]]:
         return values
 
     return parse
+
+
+def _rgba(value: str) -> dict[str, int]:
+    coordinates = _coordinates(4, "color")(value)
+    if any(channel < 0 or channel > 255 for channel in coordinates):
+        raise argparse.ArgumentTypeError("color channels must be from 0 through 255")
+    return dict(zip(("r", "g", "b", "a"), coordinates, strict=True))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -375,7 +478,13 @@ def _show_help(topic: tuple[str, ...]) -> int:
         selected = choices[name]
         traversed.append(name)
     print(selected.format_help().rstrip())
-    guidance, examples = HELP_GUIDANCE.get(tuple(traversed), ("", ()))
+    guidance, examples = HELP_GUIDANCE.get(
+        tuple(traversed),
+        (
+            "Review the bounded options below; use --dry-run when the command offers it.",
+            (f"{selected.prog} --help",),
+        ),
+    )
     if guidance:
         print(f"\nGUIDANCE\n{guidance}")
     if examples:
@@ -435,6 +544,7 @@ def _run_edit_command(args: argparse.Namespace, service: AuthService, api: Image
         "run": _run_deterministic_program,
         "replace-object": _run_replacement,
         "replace-background": _run_replacement,
+        "raster": _run_raster,
         "inpaint": _run_inpaint,
     }
     handlers[args.command](args, service, api)
@@ -652,6 +762,273 @@ def _validate_replacement_controls(args: argparse.Namespace) -> None:
             raise CliError(f"--{name} must be from 1 through 64")
     if args.feather is not None and not Decimal(0) < args.feather <= Decimal(64):
         raise CliError("--feather must be greater than 0 and at most 64")
+
+
+def _run_raster(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    commands = _raster_commands(args)
+    input_paths, mask_paths = _raster_input_paths(args)
+    program = {
+        "revision": "deterministic-edit-v1",
+        "inputs": {
+            **{name: "image" for name in input_paths},
+            **{name: "mask" for name in mask_paths},
+        },
+        "source_input": "source",
+        "commands": commands,
+        "encoding": {"format": "png"},
+    }
+    if args.dry_run:
+        print(json.dumps(program, sort_keys=True, separators=(",", ":")))
+        return
+    if args.output is None:
+        raise CliError("--output is required unless --dry-run is used")
+    require_available_output(args.output)
+    result = api.run_deterministic_program(
+        service.access_token(frozenset({"images:edit"})),
+        program=program,
+        input_paths=input_paths,
+        mask_paths=mask_paths,
+    )
+    save_deterministic_edit(result, args.output)
+    _print_deterministic_result(result, args.output)
+
+
+def _raster_commands(args: argparse.Namespace) -> list[dict[str, object]]:
+    if args.raster_command == "crop":
+        x, y, width, height = args.rect
+        if width <= 0 or height <= 0:
+            raise CliError("crop width and height must be positive")
+        return [
+            {
+                "id": "crop",
+                "op": "crop",
+                "rect": {"x": x, "y": y, "width": width, "height": height},
+            }
+        ]
+    if args.raster_command == "filter":
+        if not Decimal(0) < args.radius <= Decimal(64):
+            raise CliError("filter radius must be greater than 0 and at most 64")
+        if not Decimal(0) <= args.amount <= Decimal(16):
+            raise CliError("filter amount must be from 0 through 16")
+        return [
+            {
+                "id": "filter",
+                "op": "filter",
+                "filter": args.kind,
+                "radius": str(args.radius),
+                "amount": str(args.amount),
+            }
+        ]
+    if args.raster_command == "auto-crop":
+        _validate_optional_decimal(args.threshold, "threshold", Decimal(0), Decimal(1))
+        if not 0 <= args.padding <= 8_192:
+            raise CliError("padding must be from 0 through 8192")
+        return [
+            {
+                "id": "auto-crop",
+                "op": "auto_crop",
+                "coverage": {"base": {"source": {"kind": "mask_input", "input": "selection"}}},
+                "threshold": str(args.threshold),
+                "padding": args.padding,
+            }
+        ]
+    if args.raster_command == "shape":
+        if args.fill is None and args.stroke is None:
+            raise CliError("shape requires --fill or --stroke")
+        if not 1 <= args.stroke_width <= 1_024:
+            raise CliError("stroke-width must be from 1 through 1024")
+        x, y, width, height = args.rect
+        return [
+            {
+                "id": "draw-shape",
+                "op": "draw_shape",
+                "shape": args.kind,
+                "rect": {"x": x, "y": y, "width": width, "height": height},
+                "fill": args.fill,
+                "stroke": args.stroke,
+                "stroke_width": args.stroke_width,
+            }
+        ]
+    if args.raster_command == "text":
+        if not args.text or len(args.text) > 4_096:
+            raise CliError("text must contain 1 to 4096 characters")
+        if not re.fullmatch(r"[0-9a-f]{64}", args.font_sha256):
+            raise CliError("font-sha256 must contain 64 lowercase hexadecimal characters")
+        if not 1 <= args.font_size <= 2_048 or not 0 <= args.stroke_width <= 128:
+            raise CliError("font-size or stroke-width is outside the supported bounds")
+        x, y = args.position
+        return [
+            {
+                "id": "draw-text",
+                "op": "draw_text",
+                "text": args.text,
+                "position": {"x": x, "y": y},
+                "font": {"id": args.font_id, "sha256": args.font_sha256},
+                "font_size_px": args.font_size,
+                "fill": args.fill,
+                "stroke": args.stroke,
+                "stroke_width": args.stroke_width,
+            }
+        ]
+    if args.raster_command == "color-match":
+        _validate_optional_decimal(args.strength, "strength", Decimal(0), Decimal(1))
+        return [
+            {
+                "id": "color-match",
+                "op": "color_match",
+                "reference_input": "reference",
+                "algorithm": args.algorithm,
+                "strength": str(args.strength),
+                "preserve_luminance": args.preserve_luminance,
+            }
+        ]
+    if args.raster_command in {"resize", "flip", "rotate", "canvas"}:
+        return [_geometry_command(args)]
+    return _adjustment_commands(args)
+
+
+def _geometry_command(args: argparse.Namespace) -> dict[str, object]:
+    source_width, source_height = _image_dimensions(args.input)
+    width, height = source_width, source_height
+    matrix = (Decimal(1), Decimal(0), Decimal(0), Decimal(1), Decimal(0), Decimal(0))
+    background = {"r": 0, "g": 0, "b": 0, "a": 0}
+    if args.raster_command == "resize":
+        _validate_canvas(args.width, args.height)
+        width, height = args.width, args.height
+        if args.fit:
+            scale = min(Decimal(width) / source_width, Decimal(height) / source_height)
+            x = (Decimal(width) - Decimal(source_width) * scale) / 2
+            y = (Decimal(height) - Decimal(source_height) * scale) / 2
+            matrix = (scale, Decimal(0), Decimal(0), scale, x, y)
+        else:
+            matrix = (
+                Decimal(width) / source_width,
+                Decimal(0),
+                Decimal(0),
+                Decimal(height) / source_height,
+                Decimal(0),
+                Decimal(0),
+            )
+    elif args.raster_command == "flip":
+        matrix = (
+            (Decimal(-1), Decimal(0), Decimal(0), Decimal(1), Decimal(width), Decimal(0))
+            if args.axis == "horizontal"
+            else (Decimal(1), Decimal(0), Decimal(0), Decimal(-1), Decimal(0), Decimal(height))
+        )
+    elif args.raster_command == "rotate":
+        matrix, width, height = _rotation_geometry(args.degrees, source_width, source_height)
+    else:
+        _validate_canvas(args.width, args.height)
+        width, height = args.width, args.height
+        matrix = (Decimal(1), Decimal(0), Decimal(0), Decimal(1), Decimal(args.x), Decimal(args.y))
+        background = args.background
+    return {
+        "id": args.raster_command,
+        "op": "affine",
+        "transform": dict(zip(("a", "b", "c", "d", "e", "f"), map(str, matrix), strict=True)),
+        "output_width": width,
+        "output_height": height,
+        "interpolation": "lanczos" if args.raster_command == "resize" else "bicubic",
+        "border": "constant",
+        "background": background,
+    }
+
+
+def _rotation_geometry(
+    degrees: int, width: int, height: int
+) -> tuple[tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal], int, int]:
+    if degrees == 90:
+        return (
+            (Decimal(0), Decimal(1), Decimal(-1), Decimal(0), Decimal(height), Decimal(0)),
+            height,
+            width,
+        )
+    if degrees == 180:
+        return (
+            (Decimal(-1), Decimal(0), Decimal(0), Decimal(-1), Decimal(width), Decimal(height)),
+            width,
+            height,
+        )
+    return (
+        (Decimal(0), Decimal(-1), Decimal(1), Decimal(0), Decimal(0), Decimal(width)),
+        height,
+        width,
+    )
+
+
+def _image_dimensions(path: Path) -> tuple[int, int]:
+    try:
+        with Image.open(path) as image:
+            return int(image.width), int(image.height)
+    except (OSError, UnidentifiedImageError) as error:
+        raise CliError(f"input image is not readable: {path}") from error
+
+
+def _validate_canvas(width: int, height: int) -> None:
+    if not 1 <= width <= 8_192 or not 1 <= height <= 8_192:
+        raise CliError("canvas width and height must be from 1 through 8192")
+    if width * height > 4_194_304:
+        raise CliError("canvas exceeds the 4194304 pixel limit")
+
+
+def _raster_input_paths(args: argparse.Namespace) -> tuple[dict[str, Path], dict[str, Path]]:
+    inputs = {"source": args.input}
+    masks: dict[str, Path] = {}
+    if args.raster_command == "auto-crop":
+        masks["selection"] = args.mask
+    if args.raster_command == "color-match":
+        inputs["reference"] = args.reference
+    return inputs, masks
+
+
+def _adjustment_commands(args: argparse.Namespace) -> list[dict[str, object]]:
+    _validate_optional_decimal(args.hue, "hue", Decimal(-180), Decimal(180))
+    _validate_optional_decimal(args.saturation, "saturation", Decimal(0), Decimal(4))
+    _validate_optional_decimal(args.tint, "tint", Decimal(-1), Decimal(1))
+    _validate_optional_decimal(args.exposure, "exposure", Decimal(-10), Decimal(10))
+    _validate_optional_decimal(args.brightness, "brightness", Decimal(-1), Decimal(1))
+    _validate_optional_decimal(args.contrast, "contrast", Decimal(0), Decimal(4))
+    if args.temperature is not None and not 1_000 <= args.temperature <= 40_000:
+        raise CliError("temperature must be from 1000 through 40000")
+    commands: list[dict[str, object]] = []
+    if args.hue is not None or args.saturation is not None:
+        commands.append(
+            {
+                "id": "hue-saturation",
+                "op": "hue_saturation",
+                "hue_degrees": str(args.hue if args.hue is not None else 0),
+                "saturation_scale": str(args.saturation if args.saturation is not None else 1),
+            }
+        )
+    if args.temperature is not None:
+        commands.append(
+            {
+                "id": "white-balance",
+                "op": "white_balance",
+                "temperature_kelvin": args.temperature,
+                "tint": str(args.tint),
+            }
+        )
+    if any(value is not None for value in (args.exposure, args.brightness, args.contrast)):
+        commands.append(
+            {
+                "id": "tone",
+                "op": "tone",
+                "exposure_stops": str(args.exposure if args.exposure is not None else 0),
+                "brightness": str(args.brightness if args.brightness is not None else 0),
+                "contrast": str(args.contrast if args.contrast is not None else 1),
+            }
+        )
+    if not commands:
+        raise CliError("raster adjust requires at least one adjustment")
+    return commands
+
+
+def _validate_optional_decimal(
+    value: Decimal | None, name: str, minimum: Decimal, maximum: Decimal
+) -> None:
+    if value is not None and (not value.is_finite() or not minimum <= value <= maximum):
+        raise CliError(f"{name} must be from {minimum} through {maximum}")
 
 
 def _run_artifact_command(
