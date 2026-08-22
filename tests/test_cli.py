@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from image_platform_cli.cli import DEFAULT_LOGIN_SCOPES, _show_help, parser
+from image_platform_cli.cli import DEFAULT_LOGIN_SCOPES, _show_help, main, parser
 
 
 def test_generate_exposes_safe_bounded_wait_controls_without_no_polling() -> None:
@@ -41,6 +41,61 @@ def test_help_navigation_rejects_unknown_child(capsys: pytest.CaptureFixture[str
     assert _show_help(("edit", "missing")) == 2
 
     assert "unknown help topic edit missing" in capsys.readouterr().err
+
+
+def test_replace_object_dry_run_emits_mask_transform_recipe(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "edit",
+            "replace-object",
+            "--base",
+            "base.png",
+            "--replacement",
+            "new.png",
+            "--mask",
+            "one.png",
+            "--mask",
+            "two.png",
+            "--threshold",
+            "0.5",
+            "--padding",
+            "3",
+            "--feather",
+            "2",
+            "--dry-run",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert '"op":"threshold"' in output
+    assert '"op":"dilate"' in output
+    assert '"op":"feather"' in output
+    assert '"mode":"union"' in output
+    assert '"composite":"replace"' in output
+
+
+def test_replace_background_dry_run_inverts_foreground_mask(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "edit",
+            "replace-background",
+            "--base",
+            "base.png",
+            "--replacement",
+            "new.png",
+            "--mask",
+            "foreground.png",
+            "--dry-run",
+        ]
+    )
+
+    assert result == 0
+    assert '"op":"invert"' in capsys.readouterr().out
 
 
 def test_explicit_seed_is_preserved_by_parser() -> None:

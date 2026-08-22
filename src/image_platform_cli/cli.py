@@ -47,6 +47,18 @@ HELP_GUIDANCE = {
             "image edit run --program edit.json --input scene=scene.png -o result.png",
         ),
     ),
+    ("edit", "replace-object"): (
+        "Replace only selected mask coverage; pixels outside coverage remain from the base image.",
+        (
+            "image edit replace-object --base scene.png --replacement new.png --mask object.png -o result.png",
+        ),
+    ),
+    ("edit", "replace-background"): (
+        "Invert one foreground mask and replace only its background coverage.",
+        (
+            "image edit replace-background --base scene.png --replacement bg.png --mask foreground.png --feather 2 -o result.png",
+        ),
+    ),
 }
 
 
@@ -186,6 +198,23 @@ def parser() -> argparse.ArgumentParser:
     run_program.add_argument("--mask", action="append", default=[], metavar="NAME=PATH")
     run_program.add_argument("--output", "-o", type=Path)
     run_program.add_argument("--dry-run", action="store_true")
+    for name in ("replace-object", "replace-background"):
+        replacement = edit_commands.add_parser(name)
+        replacement.add_argument("--base", type=Path, required=True)
+        replacement.add_argument("--replacement", type=Path, required=True)
+        replacement.add_argument("--mask", type=Path, action="append", required=True)
+        replacement.add_argument(
+            "--combine", choices=("union", "intersection", "subtract"), default="union"
+        )
+        replacement.add_argument("--threshold", type=Decimal)
+        replacement.add_argument("--invert", action="store_true")
+        morphology = replacement.add_mutually_exclusive_group()
+        morphology.add_argument("--dilate", type=int)
+        morphology.add_argument("--erode", type=int)
+        replacement.add_argument("--padding", type=int, help="alias for mask dilation")
+        replacement.add_argument("--feather", type=Decimal)
+        replacement.add_argument("--output", "-o", type=Path)
+        replacement.add_argument("--dry-run", action="store_true")
     inpaint = edit_commands.add_parser("inpaint")
     inpaint.add_argument("prompt")
     inpaint.add_argument("--input", type=Path, required=True)
@@ -404,6 +433,8 @@ def _run_edit_command(args: argparse.Namespace, service: AuthService, api: Image
         "segment": _run_segmentation,
         "composite": _run_composite,
         "run": _run_deterministic_program,
+        "replace-object": _run_replacement,
+        "replace-background": _run_replacement,
         "inpaint": _run_inpaint,
     }
     handlers[args.command](args, service, api)
@@ -538,6 +569,89 @@ def _run_inpaint(args: argparse.Namespace, service: AuthService, api: ImageApiCl
         f"effective={image.safety_filter_effective} "
         f"outcome={image.safety_filter_outcome}"
     )
+
+
+def _run_replacement(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    background = args.command == "replace-background"
+    _validate_replacement_controls(args)
+    if background and len(args.mask) != 1:
+        raise CliError("replace-background currently requires exactly one foreground mask")
+    if args.padding is not None and (args.dilate is not None or args.erode is not None):
+        raise CliError("--padding cannot be combined with --dilate or --erode")
+    transforms: list[dict[str, object]] = []
+    if args.threshold is not None:
+        transforms.append({"op": "threshold", "cutoff": str(args.threshold)})
+    radius = args.padding if args.padding is not None else args.dilate
+    if radius is not None:
+        transforms.append({"op": "dilate", "radius": radius, "shape": "disk"})
+    if args.erode is not None:
+        transforms.append({"op": "erode", "radius": args.erode, "shape": "disk"})
+    if background or args.invert:
+        transforms.append({"op": "invert"})
+    if args.feather is not None:
+        transforms.append({"op": "feather", "radius": str(args.feather), "border": "transparent"})
+    coverage = _replacement_coverage(args.mask, args.combine, transforms)
+    program = {
+        "revision": "deterministic-edit-v1",
+        "inputs": {
+            "base": "image",
+            "replacement": "image",
+            **{f"mask{index}": "mask" for index in range(len(args.mask))},
+        },
+        "source_input": "base",
+        "commands": [
+            {
+                "id": "replace-background" if background else "replace-object",
+                "op": "paste_image",
+                "input": "replacement",
+                "composite": "replace",
+                "coverage": coverage,
+            }
+        ],
+        "encoding": {"format": "png"},
+    }
+    if args.dry_run:
+        print(json.dumps(program, sort_keys=True, separators=(",", ":")))
+        return
+    if args.output is None:
+        raise CliError("--output is required unless --dry-run is used")
+    require_available_output(args.output)
+    result = api.run_deterministic_program(
+        service.access_token(frozenset({"images:edit"})),
+        program=program,
+        input_paths={"base": args.base, "replacement": args.replacement},
+        mask_paths={f"mask{index}": path for index, path in enumerate(args.mask)},
+    )
+    save_deterministic_edit(result, args.output)
+    _print_deterministic_result(result, args.output)
+
+
+def _replacement_coverage(
+    masks: Sequence[Path], combine: str, transforms: list[dict[str, object]]
+) -> dict[str, object]:
+    def layer(index: int) -> dict[str, object]:
+        return {
+            "source": {"kind": "mask_input", "input": f"mask{index}"},
+            "transforms": transforms,
+        }
+
+    return {
+        "base": layer(0),
+        "combine": [{"mode": combine, "layer": layer(index)} for index in range(1, len(masks))],
+    }
+
+
+def _validate_replacement_controls(args: argparse.Namespace) -> None:
+    if args.command == "replace-background" and args.invert:
+        raise CliError("replace-background already inverts its foreground mask")
+    if args.threshold is not None and not Decimal(0) <= args.threshold <= Decimal(1):
+        raise CliError("--threshold must be from 0 through 1")
+    for name in ("dilate", "erode", "padding"):
+        value = getattr(args, name)
+        if value is not None and not 1 <= value <= 64:
+            raise CliError(f"--{name} must be from 1 through 64")
+    if args.feather is not None and not Decimal(0) < args.feather <= Decimal(64):
+        raise CliError("--feather must be greater than 0 and at most 64")
 
 
 def _run_artifact_command(

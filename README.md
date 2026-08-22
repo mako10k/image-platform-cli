@@ -80,6 +80,16 @@ validates bindings and emits stable compact JSON without authentication or an AP
 `image help edit run` to navigate into a group or command; detailed topics include guidance,
 copyable examples, child topics, and a related parent topic.
 
+`image edit replace-object` and `image edit replace-background` compile common replacement
+workflows into the same deterministic program contract. They support thresholding, disk dilation
+(`--padding` is its bounding-mask convenience alias), erosion, feathering, and union,
+intersection, subtraction, or explicit inversion of object masks. Background replacement inverts
+one foreground mask automatically.
+The replacement command uses coverage-limited `replace` compositing, so pixels outside the resolved
+coverage remain the original base pixels. Both commands support `--dry-run`, and their detailed
+examples are available through `image help edit replace-object` and
+`image help edit replace-background`.
+
 Run `./scripts/static-checks.sh` before committing. In addition to Ruff and strict mypy, it rejects
 cyclomatic-complexity regressions through Xenon and clone-code blocks of eight or more similar
 lines through Pylint. CI runs the same locked checks and the complete test suite.
