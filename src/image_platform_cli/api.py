@@ -271,7 +271,14 @@ class ImageApiClient:
             or (width, height) != (source_width, source_height)
         ):
             raise ApiError("image API returned inconsistent segmentation receipt")
-        return SegmentationResult(source, mask, digest, width, height)
+        return SegmentationResult(
+            source,
+            mask,
+            digest,
+            width,
+            height,
+            _required_decimal(receipt, "measured_compute_cost_usd"),
+        )
 
     def composite(
         self,
@@ -384,6 +391,7 @@ class ImageApiClient:
             width,
             height,
             _required_string(receipt, "program_sha256"),
+            _required_decimal(body, "actual_cost_usd"),
         )
 
     def load_deterministic_program(
@@ -472,6 +480,7 @@ class ImageApiClient:
             width,
             height,
             _required_string(receipt, "program_sha256"),
+            _required_decimal(body, "actual_cost_usd"),
             command_receipts,
         )
 

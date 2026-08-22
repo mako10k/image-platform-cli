@@ -133,11 +133,13 @@ def test_deterministic_result_prints_actual_output_format(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _print_deterministic_result(
-        DeterministicEditResult(b"webp", "image/webp", "a" * 64, 2, 1, "b" * 64),
+        DeterministicEditResult(b"webp", "image/webp", "a" * 64, 2, 1, "b" * 64, Decimal(0)),
         Path("result.webp"),
     )
 
-    assert "2x1 WebP" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "2x1 WebP" in output
+    assert "Compute cost USD: 0" in output
 
 
 def test_raster_adjust_dry_run_composes_stable_command_order(
@@ -289,6 +291,7 @@ def test_reproducibility_check_compares_full_receipt_evidence(
         10,
         20,
         "b" * 64,
+        Decimal(0),
         (("crop", "crop", "c" * 64, "d" * 64),),
     )
 

@@ -375,6 +375,7 @@ def test_segment_uses_point_selector_and_verifies_mask_receipt(tmp_path: Path) -
                 },
                 "receipt": {
                     "profile": "segment-grounding-dino-sam2-tiny",
+                    "measured_compute_cost_usd": "0.001234",
                     "input_image": source_metadata,
                     "mask_image": mask_metadata,
                 },
@@ -392,6 +393,7 @@ def test_segment_uses_point_selector_and_verifies_mask_receipt(tmp_path: Path) -
         )
 
     assert result.mask_data == mask
+    assert result.measured_compute_cost_usd == Decimal("0.001234")
     assert result.mask_sha256 == hashlib.sha256(mask).hexdigest()
 
 
@@ -400,7 +402,9 @@ def test_segmentation_outputs_are_all_preflighted_before_writing(tmp_path: Path)
     mask_buffer = BytesIO()
     Image.new("L", (256, 256), 255).save(mask_buffer, format="PNG")
     mask = mask_buffer.getvalue()
-    result = SegmentationResult(source, mask, hashlib.sha256(mask).hexdigest(), 256, 256)
+    result = SegmentationResult(
+        source, mask, hashlib.sha256(mask).hexdigest(), 256, 256, Decimal("0.001234")
+    )
     mask_path = tmp_path / "mask.png"
     foreground_path = tmp_path / "foreground.png"
     foreground_path.write_bytes(b"existing")
@@ -422,7 +426,9 @@ def test_segmentation_writes_mask_foreground_and_background(tmp_path: Path) -> N
     mask_buffer = BytesIO()
     Image.new("L", (256, 256), 255).save(mask_buffer, format="PNG")
     mask = mask_buffer.getvalue()
-    result = SegmentationResult(source, mask, hashlib.sha256(mask).hexdigest(), 256, 256)
+    result = SegmentationResult(
+        source, mask, hashlib.sha256(mask).hexdigest(), 256, 256, Decimal("0.001234")
+    )
     mask_path = tmp_path / "mask.png"
     foreground_path = tmp_path / "foreground.png"
     background_path = tmp_path / "background.png"
@@ -548,6 +554,7 @@ def test_generic_deterministic_program_binds_inputs_and_verifies_command_hashes(
         return httpx.Response(
             200,
             json={
+                "actual_cost_usd": "0",
                 "image": metadata,
                 "data_base64": base64.b64encode(source).decode("ascii"),
                 "receipt": {
@@ -580,6 +587,7 @@ def test_generic_deterministic_program_binds_inputs_and_verifies_command_hashes(
         )
 
     assert result.program_sha256 == program_hash
+    assert result.actual_cost_usd == Decimal(0)
     assert result.command_receipts == (("flip", "flip", normalized_hash, pixel_hash),)
 
 

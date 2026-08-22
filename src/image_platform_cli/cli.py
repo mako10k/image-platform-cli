@@ -777,6 +777,7 @@ def _run_segmentation(args: argparse.Namespace, service: AuthService, api: Image
     )
     print(f"Saved {segmented.width}x{segmented.height} segmentation outputs.")
     print(f"Mask SHA-256: {segmented.mask_sha256}")
+    print(f"Compute cost USD: {segmented.measured_compute_cost_usd}")
 
 
 def _run_composite(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
@@ -831,6 +832,7 @@ def _print_deterministic_result(result: object, output: Path) -> None:
     print(f"Saved {result.width}x{result.height} {format_name} to {output}.")
     print(f"SHA-256: {result.sha256}")
     print(f"Program SHA-256: {result.program_sha256}")
+    print(f"Compute cost USD: {result.actual_cost_usd}")
 
 
 def _run_reproducibility_check(

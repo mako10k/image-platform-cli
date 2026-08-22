@@ -58,6 +58,7 @@ class SegmentationResult:
     mask_sha256: str
     width: int
     height: int
+    measured_compute_cost_usd: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,4 +69,5 @@ class DeterministicEditResult:
     width: int
     height: int
     program_sha256: str
+    actual_cost_usd: Decimal
     command_receipts: tuple[tuple[str, str, str, str], ...] = ()
