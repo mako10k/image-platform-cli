@@ -108,6 +108,26 @@ def test_replace_background_dry_run_inverts_foreground_mask(
     assert '"op":"invert"' in capsys.readouterr().out
 
 
+def test_convert_surface_requires_explicit_format_and_quality() -> None:
+    arguments = parser().parse_args(
+        [
+            "edit",
+            "convert",
+            "--input",
+            "source.png",
+            "--output",
+            "result.webp",
+            "--format",
+            "webp",
+            "--quality",
+            "87",
+        ]
+    )
+
+    assert arguments.command == "convert"
+    assert arguments.format == "webp" and arguments.quality == 87
+
+
 def test_raster_adjust_dry_run_composes_stable_command_order(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

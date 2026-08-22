@@ -245,6 +245,13 @@ def parser() -> argparse.ArgumentParser:
     caption.add_argument("--instruction", default="Describe this image concisely.")
     caption.add_argument("--max-output-tokens", type=int, default=128)
     caption.add_argument("--json", action="store_true")
+    convert = edit_commands.add_parser(
+        "convert", help="deterministically convert PNG, JPEG, or WebP"
+    )
+    convert.add_argument("--input", type=Path, required=True)
+    convert.add_argument("--output", "-o", type=Path, required=True)
+    convert.add_argument("--format", choices=("png", "jpeg", "webp"), required=True)
+    convert.add_argument("--quality", type=int, default=90)
     segment = edit_commands.add_parser("segment")
     segment.add_argument("--input", type=Path, required=True)
     selectors = segment.add_mutually_exclusive_group(required=True)
@@ -642,6 +649,7 @@ def _run_edit_command(args: argparse.Namespace, service: AuthService, api: Image
     handlers = {
         "image-to-image": _run_image_to_image,
         "i2i": _run_image_to_image,
+        "convert": _run_convert,
         "segment": _run_segmentation,
         "composite": _run_composite,
         "run": _run_deterministic_program,
@@ -687,6 +695,33 @@ def _run_image_to_image(
     print(f"Compute cost USD: {image.measured_compute_cost_usd}")
     if args.capture_input:
         print(f"Input Artifact: {artifact_id}")
+
+
+def _run_convert(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    require_available_output(args.output)
+    if args.format == "png" and args.quality != 90:
+        raise CliError("--quality is not configurable for PNG")
+    if not 1 <= args.quality <= 100:
+        raise CliError("--quality must be from 1 through 100")
+    program = {
+        "revision": "deterministic-edit-v1",
+        "inputs": {"source": "image"},
+        "source_input": "source",
+        "commands": [{"id": "convert", "op": "convert"}],
+        "encoding": {
+            "format": args.format,
+            "quality": args.quality,
+            "alpha_policy": "preserve_or_flatten_white_v1",
+        },
+    }
+    result = api.run_deterministic_program(
+        service.access_token(frozenset({"images:edit"})),
+        program=program,
+        input_paths={"source": args.input},
+        mask_paths={},
+    )
+    save_deterministic_edit(result, args.output)
+    _print_deterministic_result(result, args.output)
 
 
 def _captured_input(

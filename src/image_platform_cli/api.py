@@ -350,7 +350,11 @@ class ImageApiClient:
             data = base64.b64decode(_required_string(body, "data_base64"), validate=True)
         except (ValueError, binascii.Error) as error:
             raise ApiError("image API returned invalid composite Base64") from error
-        digest, width, height = _verified_png(data, metadata)
+        mime_type = _required_string(metadata, "mime_type")
+        _verify_artifact(data, mime_type, metadata)
+        digest = hashlib.sha256(data).hexdigest()
+        width = _required_int(metadata, "width")
+        height = _required_int(metadata, "height")
         receipt = _required_dict(body.get("receipt"))
         receipt_inputs = _required_dict(receipt.get("input_sha256s"))
         receipt_commands = receipt.get("commands")
@@ -375,7 +379,7 @@ class ImageApiClient:
             raise ApiError("image API returned inconsistent composite receipt")
         return DeterministicEditResult(
             data,
-            "image/png",
+            mime_type,
             digest,
             width,
             height,
@@ -429,7 +433,11 @@ class ImageApiClient:
             data = base64.b64decode(_required_string(body, "data_base64"), validate=True)
         except (ValueError, binascii.Error) as error:
             raise ApiError("image API returned invalid deterministic-edit Base64") from error
-        digest, width, height = _verified_png(data, metadata)
+        mime_type = _required_string(metadata, "mime_type")
+        _verify_artifact(data, mime_type, metadata)
+        digest = hashlib.sha256(data).hexdigest()
+        width = _required_int(metadata, "width")
+        height = _required_int(metadata, "height")
         receipt = _required_dict(body.get("receipt"))
         raw_receipts = receipt.get("commands")
         if not isinstance(raw_receipts, list):
@@ -459,7 +467,7 @@ class ImageApiClient:
             raise ApiError("image API returned inconsistent deterministic-edit receipt")
         return DeterministicEditResult(
             data,
-            "image/png",
+            mime_type,
             digest,
             width,
             height,
@@ -1699,8 +1707,13 @@ def _validate_deterministic_program(value: Any) -> dict[str, Any]:
     if len(set(identities)) != len(identities):
         raise ApiError("program command ids must be unique")
     encoding = value.get("encoding")
-    if not isinstance(encoding, dict) or encoding.get("format") != "png":
-        raise ApiError("program encoding format must be png")
+    if not isinstance(encoding, dict) or encoding.get("format") not in {"png", "jpeg", "webp"}:
+        raise ApiError("program encoding format must be png, jpeg, or webp")
+    quality = encoding.get("quality", 90)
+    if not isinstance(quality, int) or isinstance(quality, bool) or not 1 <= quality <= 100:
+        raise ApiError("program encoding quality must be from 1 through 100")
+    if encoding.get("format") == "png" and quality != 90:
+        raise ApiError("program encoding quality is not configurable for PNG")
     return value
 
 
