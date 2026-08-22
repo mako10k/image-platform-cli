@@ -83,6 +83,18 @@ HELP_GUIDANCE = {
         "Execute the same deterministic program twice and compare every receipt and output hash.",
         ("image edit verify --program edit.json --input scene=scene.png",),
     ),
+    ("batch",): (
+        "Plan, launch, inspect, and download bounded generation Campaigns.",
+        ("image help batch iterate", "image help batch evaluate", "image batch results ID"),
+    ),
+    ("batch", "iterate"): (
+        "Use the server-owned rubric to evaluate and revise at most four candidates for three rounds.",
+        ("image batch iterate bplan_1 --max-cost 0.24 --threshold 0.8 --wait 60 --json",),
+    ),
+    ("batch", "evaluate"): (
+        "Show immutable round scores, reasons, cost evidence, and the Campaign stop reason.",
+        ("image batch evaluate campaign_1 --json", "image batch results campaign_1 --json"),
+    ),
 }
 
 
@@ -165,6 +177,18 @@ def parser() -> argparse.ArgumentParser:
     batch_run.add_argument("--wait", type=int, default=0)
     batch_run.add_argument("--allow-long-wait", action="store_true")
     batch_run.add_argument("--json", action="store_true")
+    batch_iterate = batch_commands.add_parser("iterate")
+    batch_iterate.add_argument("plan_id")
+    batch_iterate.add_argument("--max-cost", type=Decimal, required=True)
+    batch_iterate.add_argument("--threshold", type=Decimal, default=Decimal("0.8"))
+    batch_iterate.add_argument("--max-rounds", type=int, default=3)
+    batch_iterate.add_argument("--allow-partial", action="store_true")
+    batch_iterate.add_argument("--wait", type=int, default=0)
+    batch_iterate.add_argument("--allow-long-wait", action="store_true")
+    batch_iterate.add_argument("--json", action="store_true")
+    batch_evaluate = batch_commands.add_parser("evaluate")
+    batch_evaluate.add_argument("campaign_id")
+    batch_evaluate.add_argument("--json", action="store_true")
     for command in ("status", "cancel", "results"):
         parser_ = batch_commands.add_parser(command)
         parser_.add_argument("campaign_id")
@@ -1177,6 +1201,23 @@ def _run_batch_command(args: argparse.Namespace, service: AuthService, api: Imag
             wait_seconds=args.wait,
             allow_long_wait=args.allow_long_wait,
         )
+    elif args.command == "iterate":
+        token = service.access_token(
+            frozenset({"batches:plan", "batches:execute", "campaigns:write", "campaigns:read"})
+        )
+        result = api.create_iterative_campaign(
+            token,
+            plan_id=args.plan_id,
+            max_cost_usd=args.max_cost,
+            score_threshold=args.threshold,
+            max_rounds=args.max_rounds,
+            allow_partial=args.allow_partial,
+            wait_seconds=args.wait,
+            allow_long_wait=args.allow_long_wait,
+        )
+    elif args.command == "evaluate":
+        token = service.access_token(frozenset({"campaigns:read"}))
+        result = api.campaign_evaluation(token, args.campaign_id)
     elif args.command == "cancel":
         token = service.access_token(frozenset({"jobs:cancel"}))
         result = api.cancel_campaign(token, args.campaign_id)

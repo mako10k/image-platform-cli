@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
@@ -1056,6 +1057,102 @@ def test_campaign_run_waits_with_one_idempotent_write_and_bounded_reads() -> Non
     assert [(request.method, request.url.path) for request in requests] == [
         ("POST", "/v1/campaigns"),
         ("GET", "/v1/campaigns/campaign_1"),
+    ]
+
+
+def test_iterative_campaign_discovers_pinned_rubric_and_posts_bounded_policy() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/v1/batch-plans/bplan_1":
+            return httpx.Response(200, json={"items": [{"index": 0}]}, request=request)
+        if request.url.path == "/v1/iteration/rubrics":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "rubric_id": "general_image_quality",
+                        "rubric_revision": "a" * 64,
+                        "evaluator_model_revision": "eval-pinned",
+                        "max_rounds": 3,
+                        "max_candidates_per_round": 4,
+                    }
+                ],
+                request=request,
+            )
+        payload = json.loads(request.read())
+        assert payload["iteration_policy"] == {
+            "rubric_id": "general_image_quality",
+            "rubric_revision": "a" * 64,
+            "evaluator_model_revision": "eval-pinned",
+            "score_threshold": "0.8",
+            "max_rounds": 2,
+            "candidates_per_round": 1,
+        }
+        assert request.headers["Idempotency-Key"]
+        return httpx.Response(
+            202,
+            json={"campaign_id": "campaign_iter", "status": "queued"},
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        campaign = ImageApiClient(http, "https://api.example").create_iterative_campaign(
+            "access-secret",
+            plan_id="bplan_1",
+            max_cost_usd="0.24",
+            score_threshold="0.8",
+            max_rounds=2,
+        )
+
+    assert campaign == {"campaign_id": "campaign_iter", "status": "queued"}
+    assert [request.url.path for request in requests] == [
+        "/v1/batch-plans/bplan_1",
+        "/v1/iteration/rubrics",
+        "/v1/campaigns",
+    ]
+
+
+def test_campaign_evaluation_projects_round_cost_and_stop_evidence() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "campaign_id": "campaign_1",
+                "status": "completed",
+                "actual_cost_usd": "0.08",
+                "max_cost_usd": "0.24",
+                "stop_reason": "threshold_reached",
+                "iteration_policy": {"score_threshold": "0.8"},
+                "rounds": [
+                    {
+                        "round_index": 0,
+                        "artifact_ids": ["art_1"],
+                        "evaluation": {
+                            "round_index": 0,
+                            "candidates": [
+                                {"artifact_id": "art_1", "score": "0.9", "reason": "clear"}
+                            ],
+                        },
+                    }
+                ],
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        evidence = ImageApiClient(http, "https://api.example").campaign_evaluation(
+            "access-secret", "campaign_1"
+        )
+
+    assert evidence["stop_reason"] == "threshold_reached"
+    assert evidence["actual_cost_usd"] == "0.08"
+    assert evidence["rounds"] == [
+        {
+            "round_index": 0,
+            "candidates": [{"artifact_id": "art_1", "score": "0.9", "reason": "clear"}],
+        }
     ]
 
 

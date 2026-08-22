@@ -697,6 +697,122 @@ class ImageApiClient:
                 break
         return campaign
 
+    def create_iterative_campaign(
+        self,
+        access_token: str,
+        *,
+        plan_id: str,
+        max_cost_usd: Decimal | str,
+        score_threshold: Decimal | str = Decimal("0.8"),
+        max_rounds: int = 3,
+        allow_partial: bool = False,
+        wait_seconds: int = 0,
+        allow_long_wait: bool = False,
+    ) -> dict[str, Any]:
+        maximum = _positive_decimal(max_cost_usd, "max-cost")
+        threshold = _bounded_score(score_threshold)
+        if isinstance(max_rounds, bool) or not 1 <= max_rounds <= 3:
+            raise ApiError("max-rounds must be from 1 through 3")
+        _validate_wait(wait_seconds, allow_long_wait)
+        safe_plan_id = _resource_id(plan_id)
+        plan = self._request_json("GET", f"/v1/batch-plans/{safe_plan_id}", access_token)
+        items = plan.get("items")
+        if not isinstance(items, list) or not 1 <= len(items) <= 4:
+            raise ApiError("iterative Campaign requires a BatchPlan with 1 through 4 candidates")
+        rubric = self._default_iteration_rubric(access_token)
+        campaign = self._safe_json(
+            "POST",
+            "/v1/campaigns",
+            access_token,
+            headers={"Idempotency-Key": str(uuid4())},
+            json={
+                "plan_id": safe_plan_id,
+                "max_cost_usd": str(maximum),
+                "allow_partial": allow_partial,
+                "iteration_policy": {
+                    **rubric,
+                    "score_threshold": str(threshold),
+                    "max_rounds": max_rounds,
+                    "candidates_per_round": len(items),
+                },
+            },
+        )
+        campaign_id = _required_string(campaign, "campaign_id")
+        if wait_seconds == 0 or _required_string(campaign, "status") in TERMINAL_CAMPAIGN_STATUSES:
+            return campaign
+        deadline = self._clock() + wait_seconds
+        while self._clock() < deadline:
+            self._sleep(min(1.0, max(0.0, deadline - self._clock())))
+            campaign = self.get_campaign(access_token, campaign_id)
+            if _required_string(campaign, "status") in TERMINAL_CAMPAIGN_STATUSES:
+                break
+        return campaign
+
+    def campaign_evaluation(self, access_token: str, campaign_id: str) -> dict[str, Any]:
+        campaign = self.get_campaign(access_token, campaign_id)
+        policy = _required_dict(campaign.get("iteration_policy"))
+        rounds = campaign.get("rounds")
+        if not isinstance(rounds, list):
+            raise ApiError("image API returned a malformed iterative Campaign")
+        evidence: list[dict[str, object]] = []
+        for raw_round in rounds:
+            round_ = _required_dict(raw_round)
+            evaluation = round_.get("evaluation")
+            if evaluation is None:
+                evidence.append(
+                    {"round_index": _required_int(round_, "round_index"), "pending": True}
+                )
+                continue
+            evaluated = _required_dict(evaluation)
+            candidates = evaluated.get("candidates")
+            if not isinstance(candidates, list) or not candidates:
+                raise ApiError("image API returned malformed evaluation evidence")
+            evidence.append(
+                {
+                    "round_index": _required_int(evaluated, "round_index"),
+                    "candidates": [
+                        {
+                            "artifact_id": _required_string(_required_dict(item), "artifact_id"),
+                            "score": _required_string(_required_dict(item), "score"),
+                            "reason": _required_string(_required_dict(item), "reason"),
+                        }
+                        for item in candidates
+                    ],
+                }
+            )
+        return {
+            "campaign_id": _required_string(campaign, "campaign_id"),
+            "status": _required_string(campaign, "status"),
+            "actual_cost_usd": _required_string(campaign, "actual_cost_usd"),
+            "max_cost_usd": _required_string(campaign, "max_cost_usd"),
+            "score_threshold": _required_string(policy, "score_threshold"),
+            "stop_reason": campaign.get("stop_reason"),
+            "rounds": evidence,
+        }
+
+    def _default_iteration_rubric(self, access_token: str) -> dict[str, str]:
+        try:
+            response = self._http.get(
+                f"{self._api_base_url}/v1/iteration/rubrics",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+        except httpx.HTTPError as error:
+            raise ApiError("image API request failed") from error
+        if not response.is_success:
+            raise ApiError(_safe_api_error(response))
+        try:
+            rubrics = response.json()
+        except ValueError as error:
+            raise ApiError("image API returned malformed iteration rubrics") from error
+        if not isinstance(rubrics, list) or len(rubrics) != 1:
+            raise ApiError("image API returned malformed iteration rubrics")
+        rubric = _required_dict(rubrics[0])
+        return {
+            "rubric_id": _required_string(rubric, "rubric_id"),
+            "rubric_revision": _required_string(rubric, "rubric_revision"),
+            "evaluator_model_revision": _required_string(rubric, "evaluator_model_revision"),
+        }
+
     def get_campaign(self, access_token: str, campaign_id: str) -> dict[str, Any]:
         return self._safe_json("GET", f"/v1/campaigns/{_resource_id(campaign_id)}", access_token)
 
@@ -1326,6 +1442,16 @@ def _positive_decimal(value: Decimal | str, name: str) -> Decimal:
         raise ApiError(f"{name} must be a positive decimal") from error
     if not parsed.is_finite() or parsed <= 0:
         raise ApiError(f"{name} must be a positive decimal")
+    return parsed
+
+
+def _bounded_score(value: Decimal | str) -> Decimal:
+    try:
+        parsed = value if isinstance(value, Decimal) else Decimal(value)
+    except (InvalidOperation, ValueError) as error:
+        raise ApiError("threshold must be a decimal from 0 through 1") from error
+    if not parsed.is_finite() or not Decimal(0) <= parsed <= Decimal(1):
+        raise ApiError("threshold must be a decimal from 0 through 1")
     return parsed
 
 

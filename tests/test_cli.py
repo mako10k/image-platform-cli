@@ -359,11 +359,38 @@ def test_batch_workflow_surface_is_server_owned_and_bounded() -> None:
         ]
     )
     results = parser().parse_args(["batch", "results", "campaign_1", "--json"])
+    iterate = parser().parse_args(
+        [
+            "batch",
+            "iterate",
+            "bplan_1",
+            "--max-cost",
+            "0.24",
+            "--threshold",
+            "0.8",
+            "--max-rounds",
+            "2",
+            "--json",
+        ]
+    )
+    evaluate = parser().parse_args(["batch", "evaluate", "campaign_1", "--json"])
 
     assert plan.intent == "blue cup" and plan.count == 4 and plan.seed == 42
     assert run.max_cost == Decimal("0.16") and run.wait == 90
     assert run.allow_long_wait is True
     assert results.campaign_id == "campaign_1"
+    assert iterate.threshold == Decimal("0.8") and iterate.max_rounds == 2
+    assert evaluate.campaign_id == "campaign_1"
+
+
+def test_iterative_help_navigation_explains_bounds_cost_and_results(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert _show_help(("batch", "iterate")) == 0
+    output = capsys.readouterr().out
+    assert "at most four candidates for three rounds" in output
+    assert "--max-cost" in output
+    assert "image help batch" in output
 
 
 def test_default_login_scopes_cover_batch_workflow() -> None:
