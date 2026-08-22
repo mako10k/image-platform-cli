@@ -34,10 +34,27 @@ DEFAULT_LOGIN_SCOPES = (
     "images:understand",
 )
 
+HELP_GUIDANCE = {
+    (): ("Use `image help GROUP [COMMAND]` for detailed help.", ("image help edit",)),
+    ("edit",): (
+        "Discover editing primitives, deterministic programs, and model-backed operations.",
+        ("image help edit run", "image capabilities --json"),
+    ),
+    ("edit", "run"): (
+        "Validate or execute one deterministic-edit-v1 JSON program with named local inputs.",
+        (
+            "image edit run --program edit.json --input scene=scene.png --dry-run",
+            "image edit run --program edit.json --input scene=scene.png -o result.png",
+        ),
+    ),
+}
+
 
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="image")
     groups = root.add_subparsers(dest="group", required=True)
+    help_command = groups.add_parser("help", help="browse command help and examples")
+    help_command.add_argument("topic", nargs="*")
     auth = groups.add_parser("auth")
     commands = auth.add_subparsers(dest="command", required=True)
     login = commands.add_parser("login")
@@ -226,6 +243,8 @@ def _decimals(count: int, name: str) -> Callable[[str], tuple[Decimal, ...]]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.group == "help":
+        return _show_help(tuple(args.topic))
     try:
         config = Config.staging()
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0)) as http:
@@ -286,132 +305,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 result = ImageApiClient(http, config.api_base_url).capabilities(access_token)
                 _emit(result, args.json)
             elif args.group == "edit":
-                api = ImageApiClient(http, config.api_base_url)
-                if args.command in {"image-to-image", "i2i"}:
-                    require_available_output(args.output)
-                    image = api.image_to_image(
-                        service.access_token(frozenset({"images:edit"})),
-                        prompt=args.prompt,
-                        input_path=args.input,
-                        profile=args.profile,
-                        negative_prompt=args.negative_prompt,
-                        strength=args.strength,
-                        guidance_scale=args.guidance_scale,
-                        inference_steps=args.steps,
-                        seed=args.seed,
-                        width=args.width,
-                        height=args.height,
-                    )
-                    save_image(image, args.output)
-                    print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
-                    print(f"SHA-256: {image.sha256}")
-                    print(f"Seed: {image.seed}")
-                    print(f"Model: {image.model_id}@{image.model_revision}")
-                    print(f"Compute cost USD: {image.measured_compute_cost_usd}")
-                elif args.command == "segment":
-                    outputs = (args.mask_output, args.foreground_output, args.background_output)
-                    selected_outputs = tuple(output for output in outputs if output is not None)
-                    if not selected_outputs:
-                        raise CliError("at least one segmentation output is required")
-                    if len(set(selected_outputs)) != len(selected_outputs):
-                        raise CliError("segmentation output paths must be distinct")
-                    for output in selected_outputs:
-                        require_available_output(output)
-                    if args.negative_point and not args.point:
-                        raise CliError("negative points require at least one positive --point")
-                    positive = [(x, y, True) for x, y in (args.point or [])]
-                    negative = [(x, y, False) for x, y in (args.negative_point or [])]
-                    segmented = api.segment(
-                        service.access_token(frozenset({"images:understand"})),
-                        input_path=args.input,
-                        text=args.text,
-                        points=positive + negative,
-                        box=tuple(args.box) if args.box is not None else None,
-                    )
-                    save_segmentation_outputs(
-                        segmented,
-                        mask_output=args.mask_output,
-                        foreground_output=args.foreground_output,
-                        background_output=args.background_output,
-                    )
-                    print(f"Saved {segmented.width}x{segmented.height} segmentation outputs.")
-                    print(f"Mask SHA-256: {segmented.mask_sha256}")
-                elif args.command == "composite":
-                    require_available_output(args.output)
-                    composite_result = api.composite(
-                        service.access_token(frozenset({"images:edit"})),
-                        background_path=args.background,
-                        overlay_path=args.overlay,
-                        mask_path=args.mask,
-                        transform=tuple(args.matrix),
-                        opacity=args.opacity,
-                        crop=tuple(args.crop) if args.crop is not None else None,
-                    )
-                    save_deterministic_edit(composite_result, args.output)
-                    print(
-                        f"Saved {composite_result.width}x{composite_result.height} PNG "
-                        f"to {args.output}."
-                    )
-                    print(f"SHA-256: {composite_result.sha256}")
-                    print(f"Program SHA-256: {composite_result.program_sha256}")
-                elif args.command == "run":
-                    program, inputs, masks = api.load_deterministic_program(
-                        args.program,
-                        input_bindings=args.input,
-                        mask_bindings=args.mask,
-                    )
-                    if args.dry_run:
-                        print(json.dumps(program, sort_keys=True, separators=(",", ":")))
-                    else:
-                        if args.output is None:
-                            raise CliError("--output is required unless --dry-run is used")
-                        require_available_output(args.output)
-                        program_result = api.run_deterministic_program(
-                            service.access_token(frozenset({"images:edit"})),
-                            program=program,
-                            input_paths=inputs,
-                            mask_paths=masks,
-                        )
-                        save_deterministic_edit(program_result, args.output)
-                        print(
-                            f"Saved {program_result.width}x{program_result.height} PNG "
-                            f"to {args.output}."
-                        )
-                        print(f"SHA-256: {program_result.sha256}")
-                        print(f"Program SHA-256: {program_result.program_sha256}")
-                        for (
-                            command_id,
-                            operation,
-                            normalized_sha,
-                            pixel_sha,
-                        ) in program_result.command_receipts:
-                            print(
-                                f"Command {command_id} ({operation}): "
-                                f"normalized={normalized_sha} pixels={pixel_sha}"
-                            )
-                else:
-                    require_available_output(args.output)
-                    inpainted = api.inpaint(
-                        service.access_token(frozenset({"images:edit"})),
-                        prompt=args.prompt,
-                        input_path=args.input,
-                        mask_path=args.mask,
-                        profile=args.profile,
-                        seed=args.seed,
-                        safety_filter=args.safety_filter,
-                    )
-                    save_image(inpainted, args.output)
-                    print(f"Saved {inpainted.width}x{inpainted.height} PNG to {args.output}.")
-                    print(f"SHA-256: {inpainted.sha256}")
-                    print(f"Seed: {inpainted.seed}")
-                    print(f"Model: {inpainted.model_id}@{inpainted.model_revision}")
-                    print(f"Compute cost USD: {inpainted.measured_compute_cost_usd}")
-                    print(
-                        "Safety filter: "
-                        f"requested={inpainted.safety_filter_requested} "
-                        f"effective={inpainted.safety_filter_effective} "
-                        f"outcome={inpainted.safety_filter_outcome}"
-                    )
+                _run_edit_command(args, service, ImageApiClient(http, config.api_base_url))
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),
@@ -437,6 +331,47 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
 
+def _show_help(topic: tuple[str, ...]) -> int:
+    selected = parser()
+    traversed: list[str] = []
+    for name in topic:
+        choices = _subparser_choices(selected)
+        if name not in choices:
+            available = ", ".join(sorted(choices)) or "none"
+            print(
+                f"error: unknown help topic {' '.join((*traversed, name))}; available: {available}",
+                file=sys.stderr,
+            )
+            return 2
+        selected = choices[name]
+        traversed.append(name)
+    print(selected.format_help().rstrip())
+    guidance, examples = HELP_GUIDANCE.get(tuple(traversed), ("", ()))
+    if guidance:
+        print(f"\nGUIDANCE\n{guidance}")
+    if examples:
+        print("\nEXAMPLES")
+        for example in examples:
+            print(f"  {example}")
+    choices = _subparser_choices(selected)
+    if choices:
+        print("\nTOPICS")
+        for name, child in sorted(choices.items()):
+            print(f"  {name:<20} {child.description or child.prog}")
+    if traversed:
+        parent = " ".join(traversed[:-1])
+        suffix = f" {parent}" if parent else ""
+        print(f"\nRELATED\n  image help{suffix}")
+    return 0
+
+
+def _subparser_choices(command: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
+    for action in command._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return dict(action.choices)
+    return {}
+
+
 def _run_job_command(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
     if args.command == "cancel":
         token = service.access_token(frozenset({"jobs:cancel"}))
@@ -460,6 +395,149 @@ def _run_job_command(args: argparse.Namespace, service: AuthService, api: ImageA
     else:
         result = api.get_job_previews(token, args.job_id)
     _emit(result, args.json)
+
+
+def _run_edit_command(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    handlers = {
+        "image-to-image": _run_image_to_image,
+        "i2i": _run_image_to_image,
+        "segment": _run_segmentation,
+        "composite": _run_composite,
+        "run": _run_deterministic_program,
+        "inpaint": _run_inpaint,
+    }
+    handlers[args.command](args, service, api)
+
+
+def _run_image_to_image(
+    args: argparse.Namespace, service: AuthService, api: ImageApiClient
+) -> None:
+    require_available_output(args.output)
+    image = api.image_to_image(
+        service.access_token(frozenset({"images:edit"})),
+        prompt=args.prompt,
+        input_path=args.input,
+        profile=args.profile,
+        negative_prompt=args.negative_prompt,
+        strength=args.strength,
+        guidance_scale=args.guidance_scale,
+        inference_steps=args.steps,
+        seed=args.seed,
+        width=args.width,
+        height=args.height,
+    )
+    save_image(image, args.output)
+    print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
+    print(f"SHA-256: {image.sha256}")
+    print(f"Seed: {image.seed}")
+    print(f"Model: {image.model_id}@{image.model_revision}")
+    print(f"Compute cost USD: {image.measured_compute_cost_usd}")
+
+
+def _run_segmentation(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    selected_outputs = tuple(
+        output
+        for output in (args.mask_output, args.foreground_output, args.background_output)
+        if output is not None
+    )
+    if not selected_outputs:
+        raise CliError("at least one segmentation output is required")
+    if len(set(selected_outputs)) != len(selected_outputs):
+        raise CliError("segmentation output paths must be distinct")
+    for output in selected_outputs:
+        require_available_output(output)
+    if args.negative_point and not args.point:
+        raise CliError("negative points require at least one positive --point")
+    positive = [(x, y, True) for x, y in (args.point or [])]
+    negative = [(x, y, False) for x, y in (args.negative_point or [])]
+    segmented = api.segment(
+        service.access_token(frozenset({"images:understand"})),
+        input_path=args.input,
+        text=args.text,
+        points=positive + negative,
+        box=tuple(args.box) if args.box is not None else None,
+    )
+    save_segmentation_outputs(
+        segmented,
+        mask_output=args.mask_output,
+        foreground_output=args.foreground_output,
+        background_output=args.background_output,
+    )
+    print(f"Saved {segmented.width}x{segmented.height} segmentation outputs.")
+    print(f"Mask SHA-256: {segmented.mask_sha256}")
+
+
+def _run_composite(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    require_available_output(args.output)
+    result = api.composite(
+        service.access_token(frozenset({"images:edit"})),
+        background_path=args.background,
+        overlay_path=args.overlay,
+        mask_path=args.mask,
+        transform=tuple(args.matrix),
+        opacity=args.opacity,
+        crop=tuple(args.crop) if args.crop is not None else None,
+    )
+    save_deterministic_edit(result, args.output)
+    _print_deterministic_result(result, args.output)
+
+
+def _run_deterministic_program(
+    args: argparse.Namespace, service: AuthService, api: ImageApiClient
+) -> None:
+    program, inputs, masks = api.load_deterministic_program(
+        args.program, input_bindings=args.input, mask_bindings=args.mask
+    )
+    if args.dry_run:
+        print(json.dumps(program, sort_keys=True, separators=(",", ":")))
+        return
+    if args.output is None:
+        raise CliError("--output is required unless --dry-run is used")
+    require_available_output(args.output)
+    result = api.run_deterministic_program(
+        service.access_token(frozenset({"images:edit"})),
+        program=program,
+        input_paths=inputs,
+        mask_paths=masks,
+    )
+    save_deterministic_edit(result, args.output)
+    _print_deterministic_result(result, args.output)
+    for command_id, operation, normalized_sha, pixel_sha in result.command_receipts:
+        print(f"Command {command_id} ({operation}): normalized={normalized_sha} pixels={pixel_sha}")
+
+
+def _print_deterministic_result(result: object, output: Path) -> None:
+    from .models import DeterministicEditResult
+
+    assert isinstance(result, DeterministicEditResult)
+    print(f"Saved {result.width}x{result.height} PNG to {output}.")
+    print(f"SHA-256: {result.sha256}")
+    print(f"Program SHA-256: {result.program_sha256}")
+
+
+def _run_inpaint(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+    require_available_output(args.output)
+    image = api.inpaint(
+        service.access_token(frozenset({"images:edit"})),
+        prompt=args.prompt,
+        input_path=args.input,
+        mask_path=args.mask,
+        profile=args.profile,
+        seed=args.seed,
+        safety_filter=args.safety_filter,
+    )
+    save_image(image, args.output)
+    print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
+    print(f"SHA-256: {image.sha256}")
+    print(f"Seed: {image.seed}")
+    print(f"Model: {image.model_id}@{image.model_revision}")
+    print(f"Compute cost USD: {image.measured_compute_cost_usd}")
+    print(
+        "Safety filter: "
+        f"requested={image.safety_filter_requested} "
+        f"effective={image.safety_filter_effective} "
+        f"outcome={image.safety_filter_outcome}"
+    )
 
 
 def _run_artifact_command(

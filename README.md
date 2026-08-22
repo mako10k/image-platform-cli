@@ -73,3 +73,13 @@ match the program's named image and mask inputs. The CLI verifies the output, in
 program, normalized-command, and per-command pixel hashes before writing the PNG. `--dry-run`
 validates bindings and emits stable compact JSON without authentication or an API request; omit
 `--output` in that mode.
+
+## Help and quality gates
+
+`image help` prints the command catalog. Continue with `image help edit` or
+`image help edit run` to navigate into a group or command; detailed topics include guidance,
+copyable examples, child topics, and a related parent topic.
+
+Run `./scripts/static-checks.sh` before committing. In addition to Ruff and strict mypy, it rejects
+cyclomatic-complexity regressions through Xenon and clone-code blocks of eight or more similar
+lines through Pylint. CI runs the same locked checks and the complete test suite.

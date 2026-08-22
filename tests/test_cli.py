@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from image_platform_cli.cli import DEFAULT_LOGIN_SCOPES, parser
+from image_platform_cli.cli import DEFAULT_LOGIN_SCOPES, _show_help, parser
 
 
 def test_generate_exposes_safe_bounded_wait_controls_without_no_polling() -> None:
@@ -23,6 +23,24 @@ def test_generate_exposes_safe_bounded_wait_controls_without_no_polling() -> Non
     assert arguments.allow_long_wait is True
     assert arguments.seed is None
     assert "--no-polling" not in parser().format_help()
+
+
+def test_help_navigation_shows_catalog_examples_and_related_topic(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert _show_help(("edit", "run")) == 0
+
+    output = capsys.readouterr().out
+    assert "GUIDANCE" in output
+    assert "EXAMPLES" in output
+    assert "image edit run --program edit.json" in output
+    assert "RELATED\n  image help edit" in output
+
+
+def test_help_navigation_rejects_unknown_child(capsys: pytest.CaptureFixture[str]) -> None:
+    assert _show_help(("edit", "missing")) == 2
+
+    assert "unknown help topic edit missing" in capsys.readouterr().err
 
 
 def test_explicit_seed_is_preserved_by_parser() -> None:
