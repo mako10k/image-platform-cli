@@ -100,6 +100,13 @@ arbitrary font path.
 reading only the source dimensions locally. Each child supports `--dry-run` and has examples under
 `image help edit raster CHILD`.
 
+`image edit matte-portrait --input portrait.png --person-mask person.png -o matte.png` calls the
+private registry-pinned portrait-matting route. `--uncertainty-radius 0..64` bounds how far the
+server may recover fractional hair or eyeglass alpha beyond the supplied person mask. The CLI
+verifies the source, mask, output, profile, model revision, normalized radius, dimensions, and
+SHA-256 receipt before writing the RGBA PNG. Detailed guidance is available through
+`image help edit matte-portrait`.
+
 Advanced deterministic surfaces include `project-quad` for perspective placement with explicit
 composite modes and `mesh` for a bounded saved vertex/triangle JSON specification. The ordinary
 `composite` command also accepts `source_over`, `replace`, `multiply`, or `screen`. `image edit

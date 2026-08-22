@@ -62,6 +62,17 @@ class SegmentationResult:
 
 
 @dataclass(frozen=True, slots=True)
+class PortraitMattingResult:
+    data: bytes = field(repr=False)
+    sha256: str
+    width: int
+    height: int
+    model_id: str
+    model_revision: str
+    measured_compute_cost_usd: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class DeterministicEditResult:
     data: bytes = field(repr=False)
     mime_type: str

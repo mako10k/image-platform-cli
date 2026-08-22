@@ -623,6 +623,32 @@ def test_segment_surface_supports_text_point_box_and_explicit_outputs() -> None:
     assert box.background_output == Path("background.png")
 
 
+def test_portrait_matting_surface_and_help_are_discoverable(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    arguments = parser().parse_args(
+        [
+            "edit",
+            "matte-portrait",
+            "--input",
+            "portrait.png",
+            "--person-mask",
+            "person.png",
+            "--uncertainty-radius",
+            "12",
+            "-o",
+            "matte.png",
+        ]
+    )
+    assert arguments.input == Path("portrait.png")
+    assert arguments.person_mask == Path("person.png")
+    assert arguments.uncertainty_radius == 12
+    assert main(["help", "edit", "matte-portrait"]) == 0
+    output = capsys.readouterr().out
+    assert "bounded fractional alpha" in output
+    assert "--uncertainty-radius 16" in output
+
+
 def test_composite_surface_exposes_crop_affine_alpha_and_mask() -> None:
     arguments = parser().parse_args(
         [

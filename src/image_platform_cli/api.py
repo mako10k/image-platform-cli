@@ -18,7 +18,12 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 
 from .errors import ApiError
-from .models import DeterministicEditResult, GeneratedImage, SegmentationResult
+from .models import (
+    DeterministicEditResult,
+    GeneratedImage,
+    PortraitMattingResult,
+    SegmentationResult,
+)
 
 TERMINAL_FAILURES = frozenset({"failed", "partial", "cancelled"})
 TERMINAL_CAMPAIGN_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
@@ -277,6 +282,61 @@ class ImageApiClient:
             digest,
             width,
             height,
+            _required_decimal(receipt, "measured_compute_cost_usd"),
+        )
+
+    def portrait_matting(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        person_mask_path: Path,
+        uncertainty_radius: int,
+    ) -> PortraitMattingResult:
+        source, source_mime, source_width, source_height = _read_edit_input(input_path)
+        mask, mask_mime, mask_width, mask_height = _read_edit_input(person_mask_path)
+        if (mask_width, mask_height) != (source_width, source_height):
+            raise ApiError("person mask dimensions must match image dimensions")
+        if not 0 <= uncertainty_radius <= 64:
+            raise ApiError("uncertainty radius must be from 0 through 64")
+        body = self._request_json(
+            "POST",
+            "/v1/portrait-mattings",
+            access_token,
+            json={
+                "image": _inline_image(source, source_mime),
+                "person_mask": _inline_image(mask, mask_mime),
+                "uncertainty_radius": uncertainty_radius,
+            },
+        )
+        output = _required_dict(body.get("output"))
+        metadata = _required_dict(output.get("image"))
+        try:
+            data = base64.b64decode(_required_string(output, "data_base64"), validate=True)
+        except (ValueError, binascii.Error) as error:
+            raise ApiError("image API returned invalid portrait matte Base64") from error
+        digest, width, height = _verified_png(data, metadata)
+        receipt = _required_dict(body.get("receipt"))
+        input_receipt = _required_dict(receipt.get("input_image"))
+        mask_receipt = _required_dict(receipt.get("person_mask"))
+        output_receipt = _required_dict(receipt.get("output_image"))
+        if (
+            _required_string(receipt, "contract_revision") != "portrait-matting-v1"
+            or _required_string(receipt, "profile") != "portrait-matting-birefnet-v1"
+            or _required_string(input_receipt, "sha256") != hashlib.sha256(source).hexdigest()
+            or _required_string(mask_receipt, "sha256") != hashlib.sha256(mask).hexdigest()
+            or _required_string(output_receipt, "sha256") != digest
+            or _required_int(receipt, "uncertainty_radius") != uncertainty_radius
+            or (width, height) != (source_width, source_height)
+        ):
+            raise ApiError("image API returned inconsistent portrait matting receipt")
+        return PortraitMattingResult(
+            data,
+            digest,
+            width,
+            height,
+            _required_string(receipt, "model_id"),
+            _required_string(receipt, "model_revision"),
             _required_decimal(receipt, "measured_compute_cost_usd"),
         )
 

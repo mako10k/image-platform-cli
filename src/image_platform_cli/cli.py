@@ -87,6 +87,12 @@ HELP_GUIDANCE = {
         "Execute the same deterministic program twice and compare every receipt and output hash.",
         ("image edit verify --program edit.json --input scene=scene.png",),
     ),
+    ("edit", "matte-portrait"): (
+        "Refine a person mask into bounded fractional alpha without changing source RGB.",
+        (
+            "image edit matte-portrait --input portrait.png --person-mask person.png --uncertainty-radius 16 -o matte.png",
+        ),
+    ),
     ("batch",): (
         "Plan, launch, inspect, and download bounded generation Campaigns.",
         ("image help batch iterate", "image help batch evaluate", "image batch results ID"),
@@ -268,6 +274,13 @@ def parser() -> argparse.ArgumentParser:
     segment.add_argument("--mask-output", type=Path)
     segment.add_argument("--foreground-output", type=Path)
     segment.add_argument("--background-output", type=Path)
+    matte = edit_commands.add_parser(
+        "matte-portrait", help="refine a person mask with registry-pinned portrait matting"
+    )
+    matte.add_argument("--input", type=Path, required=True)
+    matte.add_argument("--person-mask", type=Path, required=True)
+    matte.add_argument("--uncertainty-radius", type=int, default=16)
+    matte.add_argument("--output", "-o", type=Path, required=True)
     composite = edit_commands.add_parser("composite")
     composite.add_argument("--background", type=Path, required=True)
     composite.add_argument("--overlay", type=Path, required=True)
@@ -657,6 +670,7 @@ def _run_edit_command(args: argparse.Namespace, service: AuthService, api: Image
         "i2i": _run_image_to_image,
         "convert": _run_convert,
         "segment": _run_segmentation,
+        "matte-portrait": _run_portrait_matting,
         "composite": _run_composite,
         "run": _run_deterministic_program,
         "replace-object": _run_replacement,
@@ -784,6 +798,23 @@ def _run_segmentation(args: argparse.Namespace, service: AuthService, api: Image
     print(f"Saved {segmented.width}x{segmented.height} segmentation outputs.")
     print(f"Mask SHA-256: {segmented.mask_sha256}")
     print(f"Compute cost USD: {segmented.measured_compute_cost_usd}")
+
+
+def _run_portrait_matting(
+    args: argparse.Namespace, service: AuthService, api: ImageApiClient
+) -> None:
+    require_available_output(args.output)
+    result = api.portrait_matting(
+        service.access_token(frozenset({"images:edit"})),
+        input_path=args.input,
+        person_mask_path=args.person_mask,
+        uncertainty_radius=args.uncertainty_radius,
+    )
+    args.output.write_bytes(result.data)
+    print(f"Saved {result.width}x{result.height} RGBA PNG to {args.output}.")
+    print(f"SHA-256: {result.sha256}")
+    print(f"Model: {result.model_id}@{result.model_revision}")
+    print(f"Compute cost USD: {result.measured_compute_cost_usd}")
 
 
 def _run_composite(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:

@@ -397,6 +397,63 @@ def test_segment_uses_point_selector_and_verifies_mask_receipt(tmp_path: Path) -
     assert result.mask_sha256 == hashlib.sha256(mask).hexdigest()
 
 
+def test_portrait_matting_verifies_input_mask_output_and_controls(tmp_path: Path) -> None:
+    source = valid_png(64, 64)
+    mask_buffer = BytesIO()
+    Image.new("L", (64, 64), 255).save(mask_buffer, format="PNG")
+    mask = mask_buffer.getvalue()
+    output_buffer = BytesIO()
+    Image.new("RGBA", (64, 64), (1, 2, 3, 127)).save(output_buffer, format="PNG")
+    output = output_buffer.getvalue()
+    source_path = tmp_path / "source.png"
+    mask_path = tmp_path / "mask.png"
+    source_path.write_bytes(source)
+    mask_path.write_bytes(mask)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/portrait-mattings"
+        metadata = {
+            "sha256": hashlib.sha256(output).hexdigest(),
+            "mime_type": "image/png",
+            "size_bytes": len(output),
+            "width": 64,
+            "height": 64,
+        }
+        return httpx.Response(
+            200,
+            json={
+                "output": {
+                    "image": metadata,
+                    "data_base64": base64.b64encode(output).decode("ascii"),
+                },
+                "receipt": {
+                    "contract_revision": "portrait-matting-v1",
+                    "profile": "portrait-matting-birefnet-v1",
+                    "model_id": "ZhengPeng7/BiRefNet-matting",
+                    "model_revision": "57f9f68b43ba337c75762b14cf3075d659007268",
+                    "input_image": {"sha256": hashlib.sha256(source).hexdigest()},
+                    "person_mask": {"sha256": hashlib.sha256(mask).hexdigest()},
+                    "output_image": metadata,
+                    "uncertainty_radius": 16,
+                    "measured_compute_cost_usd": "0.0016",
+                },
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").portrait_matting(
+            "access-secret",
+            input_path=source_path,
+            person_mask_path=mask_path,
+            uncertainty_radius=16,
+        )
+
+    assert result.data == output
+    assert result.model_revision == "57f9f68b43ba337c75762b14cf3075d659007268"
+    assert result.measured_compute_cost_usd == Decimal("0.0016")
+
+
 def test_segmentation_outputs_are_all_preflighted_before_writing(tmp_path: Path) -> None:
     source = valid_png(256, 256)
     mask_buffer = BytesIO()
