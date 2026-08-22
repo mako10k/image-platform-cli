@@ -8,6 +8,7 @@ from PIL import Image
 from image_platform_cli.cli import (
     DEFAULT_LOGIN_SCOPES,
     _captured_input,
+    _print_deterministic_result,
     _run_reproducibility_check,
     _show_help,
     main,
@@ -126,6 +127,17 @@ def test_convert_surface_requires_explicit_format_and_quality() -> None:
 
     assert arguments.command == "convert"
     assert arguments.format == "webp" and arguments.quality == 87
+
+
+def test_deterministic_result_prints_actual_output_format(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _print_deterministic_result(
+        DeterministicEditResult(b"webp", "image/webp", "a" * 64, 2, 1, "b" * 64),
+        Path("result.webp"),
+    )
+
+    assert "2x1 WebP" in capsys.readouterr().out
 
 
 def test_raster_adjust_dry_run_composes_stable_command_order(

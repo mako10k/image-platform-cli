@@ -823,7 +823,12 @@ def _print_deterministic_result(result: object, output: Path) -> None:
     from .models import DeterministicEditResult
 
     assert isinstance(result, DeterministicEditResult)
-    print(f"Saved {result.width}x{result.height} PNG to {output}.")
+    format_name = {
+        "image/png": "PNG",
+        "image/jpeg": "JPEG",
+        "image/webp": "WebP",
+    }.get(result.mime_type, result.mime_type)
+    print(f"Saved {result.width}x{result.height} {format_name} to {output}.")
     print(f"SHA-256: {result.sha256}")
     print(f"Program SHA-256: {result.program_sha256}")
 
