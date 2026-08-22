@@ -669,24 +669,45 @@ class ImageApiClient:
         self,
         access_token: str,
         *,
-        query: str,
+        query: str | None = None,
+        image_path: Path | None = None,
+        artifact_id: str | None = None,
         namespace: str = "default",
         mime_types: Sequence[str] = (),
         created_after: str | None = None,
         limit: int = 20,
     ) -> dict[str, Any]:
-        if not query.strip() or len(query) > 2048:
+        if sum(value is not None for value in (query, image_path, artifact_id)) != 1:
+            raise ApiError("exactly one search query, --image, or --artifact is required")
+        if query is not None and (not query.strip() or len(query) > 2048):
             raise ApiError("search query must contain 1 to 2048 non-whitespace characters")
         if limit < 1 or limit > 100:
             raise ApiError("limit must be from 1 through 100")
         filters: dict[str, object] = {"mime_type": list(mime_types)}
         if created_after is not None:
             filters["created_after"] = created_after
+        payload: dict[str, object] = {
+            "namespace": namespace,
+            "filters": filters,
+            "limit": limit,
+        }
+        if query is not None:
+            payload["query"] = query
+        elif image_path is not None:
+            data, mime_type, _, _ = _read_edit_input(image_path)
+            payload["image"] = {
+                "mime_type": mime_type,
+                "data_base64": base64.b64encode(data).decode("ascii"),
+            }
+        else:
+            if artifact_id is None:
+                raise AssertionError("validated search requires one query source")
+            payload["artifact_id"] = _resource_id(artifact_id)
         return self._safe_json(
             "POST",
             "/v1/search",
             access_token,
-            json={"query": query, "namespace": namespace, "filters": filters, "limit": limit},
+            json=payload,
         )
 
     def create_batch_plan(

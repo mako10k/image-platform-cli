@@ -961,6 +961,37 @@ def test_artifact_upload_uses_signed_put_without_forwarding_oauth(tmp_path: Path
     assert len(requests) == 3
 
 
+def test_search_accepts_image_and_artifact_query_sources(tmp_path: Path) -> None:
+    image = tmp_path / "query.png"
+    image.write_bytes(valid_png(256, 256))
+    payloads: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "embedding_profile": "image-search-default",
+                "model": "model",
+                "model_revision": "revision",
+                "dimension": 768,
+                "results": [],
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        api = ImageApiClient(http, "https://api.example")
+        api.search("access-secret", image_path=image)
+        api.search("access-secret", artifact_id="art_1")
+
+    assert payloads[0]["image"] == {
+        "mime_type": "image/png",
+        "data_base64": base64.b64encode(image.read_bytes()).decode("ascii"),
+    }
+    assert payloads[1]["artifact_id"] == "art_1"
+
+
 def test_job_show_removes_entire_nested_prompt_plan() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

@@ -159,7 +159,10 @@ def parser() -> argparse.ArgumentParser:
     artifact_upload.add_argument("--kind", choices=("image", "mask"), default="image")
     artifact_upload.add_argument("--json", action="store_true")
     search = groups.add_parser("search")
-    search.add_argument("query")
+    search_query = search.add_mutually_exclusive_group(required=True)
+    search_query.add_argument("query", nargs="?")
+    search_query.add_argument("--image", type=Path)
+    search_query.add_argument("--artifact")
     search.add_argument("--namespace", default="default")
     search.add_argument("--mime-type", action="append", default=[])
     search.add_argument("--created-after")
@@ -479,6 +482,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 result = ImageApiClient(http, config.api_base_url).search(
                     access_token,
                     query=args.query,
+                    image_path=args.image,
+                    artifact_id=args.artifact,
                     namespace=args.namespace,
                     mime_types=args.mime_type,
                     created_after=args.created_after,
