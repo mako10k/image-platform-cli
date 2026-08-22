@@ -431,6 +431,7 @@ def test_composite_uses_native_image_operations_and_verifies_receipt(tmp_path: P
             mask_path=mask_path,
             transform=(Decimal(1), Decimal(0), Decimal(0), Decimal(1), Decimal(20), Decimal(30)),
             opacity=Decimal("0.8"),
+            composite="source_over",
             crop=(0, 0, 200, 220),
         )
 

@@ -243,12 +243,15 @@ class ImageApiClient:
         mask_path: Path | None,
         transform: tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal],
         opacity: Decimal,
+        composite: str,
         crop: tuple[int, int, int, int] | None,
     ) -> DeterministicEditResult:
         background, background_mime, _, _ = _read_edit_input(background_path)
         overlay, overlay_mime, _, _ = _read_edit_input(overlay_path)
         mask_input = _read_edit_input(mask_path) if mask_path is not None else None
         _validate_composite_controls(transform, opacity, crop)
+        if composite not in {"source_over", "replace", "multiply", "screen"}:
+            raise ApiError("unsupported composite mode")
         inputs: dict[str, object] = {
             "background": _inline_image(background, background_mime),
             "overlay": _inline_image(overlay, overlay_mime),
@@ -274,6 +277,7 @@ class ImageApiClient:
                     zip(("a", "b", "c", "d", "e", "f"), map(str, transform), strict=True)
                 ),
                 "opacity": str(opacity),
+                "composite": composite,
                 **({"coverage": coverage} if coverage is not None else {}),
             }
         ]

@@ -79,6 +79,10 @@ HELP_GUIDANCE = {
             "image edit raster adjust --input scene.png --hue 15 --saturation 1.1 --contrast 1.05 -o adjusted.png",
         ),
     ),
+    ("edit", "verify"): (
+        "Execute the same deterministic program twice and compare every receipt and output hash.",
+        ("image edit verify --program edit.json --input scene=scene.png",),
+    ),
 }
 
 
@@ -211,6 +215,11 @@ def parser() -> argparse.ArgumentParser:
         default=(Decimal(1), Decimal(0), Decimal(0), Decimal(1), Decimal(0), Decimal(0)),
     )
     composite.add_argument("--opacity", type=Decimal, default=Decimal(1))
+    composite.add_argument(
+        "--composite",
+        choices=("source_over", "replace", "multiply", "screen"),
+        default="source_over",
+    )
     composite.add_argument("--crop", type=_coordinates(4, "crop"))
     run_program = edit_commands.add_parser("run")
     run_program.add_argument("--program", type=Path, required=True)
@@ -218,6 +227,10 @@ def parser() -> argparse.ArgumentParser:
     run_program.add_argument("--mask", action="append", default=[], metavar="NAME=PATH")
     run_program.add_argument("--output", "-o", type=Path)
     run_program.add_argument("--dry-run", action="store_true")
+    verify_program = edit_commands.add_parser("verify")
+    verify_program.add_argument("--program", type=Path, required=True)
+    verify_program.add_argument("--input", action="append", default=[], metavar="NAME=PATH")
+    verify_program.add_argument("--mask", action="append", default=[], metavar="NAME=PATH")
     for name in ("replace-object", "replace-background"):
         replacement = edit_commands.add_parser(name)
         replacement.add_argument("--base", type=Path, required=True)
@@ -295,6 +308,17 @@ def parser() -> argparse.ArgumentParser:
     raster_canvas.add_argument("--x", type=int, default=0)
     raster_canvas.add_argument("--y", type=int, default=0)
     raster_canvas.add_argument("--background", type=_rgba, default={"r": 0, "g": 0, "b": 0, "a": 0})
+    raster_project = raster_commands.add_parser("project-quad")
+    raster_project.add_argument("--texture", type=Path, required=True)
+    raster_project.add_argument("--destination", type=_coordinates(8, "destination"), required=True)
+    raster_project.add_argument(
+        "--composite",
+        choices=("source_over", "replace", "multiply", "screen"),
+        default="source_over",
+    )
+    raster_mesh = raster_commands.add_parser("mesh")
+    raster_mesh.add_argument("--texture", type=Path, required=True)
+    raster_mesh.add_argument("--mesh-spec", type=Path, required=True)
     for raster_command in (
         raster_crop,
         raster_filter,
@@ -307,6 +331,8 @@ def parser() -> argparse.ArgumentParser:
         raster_flip,
         raster_rotate,
         raster_canvas,
+        raster_project,
+        raster_mesh,
     ):
         raster_command.add_argument("--input", type=Path, required=True)
         raster_command.add_argument("--output", "-o", type=Path)
@@ -545,6 +571,7 @@ def _run_edit_command(args: argparse.Namespace, service: AuthService, api: Image
         "replace-object": _run_replacement,
         "replace-background": _run_replacement,
         "raster": _run_raster,
+        "verify": _run_reproducibility_check,
         "inpaint": _run_inpaint,
     }
     handlers[args.command](args, service, api)
@@ -617,6 +644,7 @@ def _run_composite(args: argparse.Namespace, service: AuthService, api: ImageApi
         mask_path=args.mask,
         transform=tuple(args.matrix),
         opacity=args.opacity,
+        composite=args.composite,
         crop=tuple(args.crop) if args.crop is not None else None,
     )
     save_deterministic_edit(result, args.output)
@@ -654,6 +682,43 @@ def _print_deterministic_result(result: object, output: Path) -> None:
     print(f"Saved {result.width}x{result.height} PNG to {output}.")
     print(f"SHA-256: {result.sha256}")
     print(f"Program SHA-256: {result.program_sha256}")
+
+
+def _run_reproducibility_check(
+    args: argparse.Namespace, service: AuthService, api: ImageApiClient
+) -> None:
+    program, inputs, masks = api.load_deterministic_program(
+        args.program, input_bindings=args.input, mask_bindings=args.mask
+    )
+    token = service.access_token(frozenset({"images:edit"}))
+    results = tuple(
+        api.run_deterministic_program(token, program=program, input_paths=inputs, mask_paths=masks)
+        for _ in range(2)
+    )
+    first, second = results
+    first_evidence = (
+        first.data,
+        first.sha256,
+        first.program_sha256,
+        first.width,
+        first.height,
+        first.command_receipts,
+    )
+    second_evidence = (
+        second.data,
+        second.sha256,
+        second.program_sha256,
+        second.width,
+        second.height,
+        second.command_receipts,
+    )
+    if first_evidence != second_evidence:
+        raise CliError("deterministic reproducibility verification failed")
+    print("Reproducibility: verified across 2 executions")
+    print(f"SHA-256: {first.sha256}")
+    print(f"Program SHA-256: {first.program_sha256}")
+    for command_id, operation, normalized_sha, pixel_sha in first.command_receipts:
+        print(f"Command {command_id} ({operation}): normalized={normalized_sha} pixels={pixel_sha}")
 
 
 def _run_inpaint(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
@@ -884,6 +949,24 @@ def _raster_commands(args: argparse.Namespace) -> list[dict[str, object]]:
         ]
     if args.raster_command in {"resize", "flip", "rotate", "canvas"}:
         return [_geometry_command(args)]
+    if args.raster_command == "project-quad":
+        coordinates = iter(args.destination)
+        points = [{"x": x, "y": y} for x, y in zip(coordinates, coordinates, strict=True)]
+        return [
+            {
+                "id": "project-quad",
+                "op": "project_quad",
+                "texture_input": "texture",
+                "destination": points,
+                "composite": args.composite,
+            }
+        ]
+    if args.raster_command == "mesh":
+        spec = _read_json_object(args.mesh_spec, "mesh spec")
+        forbidden = {"id", "op", "texture_input"} & set(spec)
+        if forbidden:
+            raise CliError("mesh spec must not override id, op, or texture_input")
+        return [{"id": "render-mesh", "op": "render_mesh", "texture_input": "texture", **spec}]
     return _adjustment_commands(args)
 
 
@@ -978,6 +1061,8 @@ def _raster_input_paths(args: argparse.Namespace) -> tuple[dict[str, Path], dict
         masks["selection"] = args.mask
     if args.raster_command == "color-match":
         inputs["reference"] = args.reference
+    if args.raster_command in {"project-quad", "mesh"}:
+        inputs["texture"] = args.texture
     return inputs, masks
 
 
@@ -1029,6 +1114,16 @@ def _validate_optional_decimal(
 ) -> None:
     if value is not None and (not value.is_finite() or not minimum <= value <= maximum):
         raise CliError(f"{name} must be from {minimum} through {maximum}")
+
+
+def _read_json_object(path: Path, name: str) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CliError(f"{name} must be a readable UTF-8 JSON file") from error
+    if not isinstance(value, dict):
+        raise CliError(f"{name} must contain one JSON object")
+    return value
 
 
 def _run_artifact_command(

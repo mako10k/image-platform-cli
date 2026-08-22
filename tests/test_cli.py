@@ -1,10 +1,18 @@
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
 
-from image_platform_cli.cli import DEFAULT_LOGIN_SCOPES, _show_help, main, parser
+from image_platform_cli.cli import (
+    DEFAULT_LOGIN_SCOPES,
+    _run_reproducibility_check,
+    _show_help,
+    main,
+    parser,
+)
+from image_platform_cli.models import DeterministicEditResult
 
 
 def test_generate_exposes_safe_bounded_wait_controls_without_no_polling() -> None:
@@ -177,6 +185,105 @@ def test_raster_rotate_dry_run_swaps_canvas_dimensions(
     )
     output = capsys.readouterr().out
     assert '"output_width":180' in output and '"output_height":320' in output
+
+
+def test_project_quad_dry_run_exposes_composite_and_destination(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert (
+        main(
+            [
+                "edit",
+                "raster",
+                "project-quad",
+                "--input",
+                "canvas.png",
+                "--texture",
+                "texture.png",
+                "--destination",
+                "0,0,100,0,100,80,0,80",
+                "--composite",
+                "screen",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert '"op":"project_quad"' in output
+    assert '"composite":"screen"' in output
+
+
+def test_mesh_dry_run_wraps_saved_mesh_spec(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mesh = tmp_path / "mesh.json"
+    mesh.write_text(
+        '{"vertices":[{"x":"0","y":"0","u":"0","v":"0"},'
+        '{"x":"10","y":"0","u":"1","v":"0"},'
+        '{"x":"0","y":"10","u":"0","v":"1"}],'
+        '"triangles":[{"a":0,"b":1,"c":2}]}',
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "edit",
+                "raster",
+                "mesh",
+                "--input",
+                "canvas.png",
+                "--texture",
+                "texture.png",
+                "--mesh-spec",
+                str(mesh),
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    assert '"op":"render_mesh"' in capsys.readouterr().out
+
+
+def test_reproducibility_check_compares_full_receipt_evidence(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = DeterministicEditResult(
+        b"png",
+        "image/png",
+        "a" * 64,
+        10,
+        20,
+        "b" * 64,
+        (("crop", "crop", "c" * 64, "d" * 64),),
+    )
+
+    class FakeService:
+        def access_token(self, scopes: frozenset[str]) -> str:
+            assert scopes == frozenset({"images:edit"})
+            return "token"
+
+    class FakeApi:
+        def load_deterministic_program(
+            self, *args: object, **kwargs: object
+        ) -> tuple[dict[str, object], dict[str, Path], dict[str, Path]]:
+            return {"revision": "deterministic-edit-v1"}, {}, {}
+
+        def run_deterministic_program(
+            self, *args: object, **kwargs: object
+        ) -> DeterministicEditResult:
+            return result
+
+    _run_reproducibility_check(
+        SimpleNamespace(program=Path("edit.json"), input=[], mask=[]),
+        FakeService(),  # type: ignore[arg-type]
+        FakeApi(),  # type: ignore[arg-type]
+    )
+
+    output = capsys.readouterr().out
+    assert "verified across 2 executions" in output
+    assert f"normalized={'c' * 64}" in output
 
 
 def test_explicit_seed_is_preserved_by_parser() -> None:
@@ -400,6 +507,7 @@ def test_composite_surface_exposes_crop_affine_alpha_and_mask() -> None:
     assert arguments.mask == Path("mask.png")
     assert arguments.matrix == tuple(Decimal(value) for value in (1, 0, 0, 1, 20, 30))
     assert arguments.opacity == Decimal("0.8")
+    assert arguments.composite == "source_over"
     assert arguments.crop == (0, 0, 512, 512)
     assert arguments.output == Path("composite.png")
 

@@ -100,6 +100,12 @@ arbitrary font path.
 reading only the source dimensions locally. Each child supports `--dry-run` and has examples under
 `image help edit raster CHILD`.
 
+Advanced deterministic surfaces include `project-quad` for perspective placement with explicit
+composite modes and `mesh` for a bounded saved vertex/triangle JSON specification. The ordinary
+`composite` command also accepts `source_over`, `replace`, `multiply`, or `screen`. `image edit
+verify` runs a saved program exactly twice and fails unless the bytes, output and program hashes,
+dimensions, and every normalized-command and pixel receipt hash match.
+
 Run `./scripts/static-checks.sh` before committing. In addition to Ruff and strict mypy, it rejects
 cyclomatic-complexity regressions through Xenon and clone-code blocks of eight or more similar
 lines through Pylint. CI runs the same locked checks and the complete test suite.
