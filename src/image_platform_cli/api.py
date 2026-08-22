@@ -1,6 +1,7 @@
 import base64
 import binascii
 import hashlib
+import json
 import os
 import re
 import secrets
@@ -336,6 +337,91 @@ class ImageApiClient:
             width,
             height,
             _required_string(receipt, "program_sha256"),
+        )
+
+    def load_deterministic_program(
+        self,
+        program_path: Path,
+        *,
+        input_bindings: Sequence[str],
+        mask_bindings: Sequence[str],
+    ) -> tuple[dict[str, Any], dict[str, Path], dict[str, Path]]:
+        try:
+            raw = json.loads(program_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ApiError("program must be a readable UTF-8 JSON file") from error
+        program = _validate_deterministic_program(raw)
+        inputs = _parse_named_paths(input_bindings, kind="input")
+        masks = _parse_named_paths(mask_bindings, kind="mask")
+        if set(inputs) & set(masks):
+            raise ApiError("input and mask binding names must be distinct")
+        declared = _required_dict(program.get("inputs"))
+        actual_kinds = {**{name: "image" for name in inputs}, **{name: "mask" for name in masks}}
+        if declared != actual_kinds:
+            raise ApiError("named bindings must exactly match program inputs and kinds")
+        return program, inputs, masks
+
+    def run_deterministic_program(
+        self,
+        access_token: str,
+        *,
+        program: dict[str, Any],
+        input_paths: Mapping[str, Path],
+        mask_paths: Mapping[str, Path],
+    ) -> DeterministicEditResult:
+        inline_inputs: dict[str, object] = {}
+        input_hashes: dict[str, str] = {}
+        for name, path in sorted({**input_paths, **mask_paths}.items()):
+            data, mime, _, _ = _read_edit_input(path)
+            inline_inputs[name] = _inline_image(data, mime)
+            input_hashes[name] = hashlib.sha256(data).hexdigest()
+        body = self._request_json(
+            "POST",
+            "/v1/image-operations",
+            access_token,
+            json={"inputs": inline_inputs, "program": program, "response_format": "base64"},
+        )
+        metadata = _required_dict(body.get("image"))
+        try:
+            data = base64.b64decode(_required_string(body, "data_base64"), validate=True)
+        except (ValueError, binascii.Error) as error:
+            raise ApiError("image API returned invalid deterministic-edit Base64") from error
+        digest, width, height = _verified_png(data, metadata)
+        receipt = _required_dict(body.get("receipt"))
+        raw_receipts = receipt.get("commands")
+        if not isinstance(raw_receipts, list):
+            raise ApiError("image API returned malformed deterministic-edit receipt")
+        command_receipts = tuple(
+            (
+                _required_string(item := _required_dict(raw), "id"),
+                _required_string(item, "op"),
+                _required_string(item, "normalized_command_sha256"),
+                _required_string(item, "output_pixel_sha256"),
+            )
+            for raw in raw_receipts
+        )
+        expected_commands = tuple(
+            (_required_string(command, "id"), _required_string(command, "op"))
+            for raw in _required_list(program.get("commands"))
+            for command in (_required_dict(raw),)
+        )
+        if (
+            _required_string(receipt, "contract_revision") != "deterministic-edit-v1"
+            or _required_dict(receipt.get("input_sha256s")) != input_hashes
+            or tuple((item[0], item[1]) for item in command_receipts) != expected_commands
+            or _required_string(receipt, "output_sha256") != digest
+            or _required_int(receipt, "output_width") != width
+            or _required_int(receipt, "output_height") != height
+        ):
+            raise ApiError("image API returned inconsistent deterministic-edit receipt")
+        return DeterministicEditResult(
+            data,
+            "image/png",
+            digest,
+            width,
+            height,
+            _required_string(receipt, "program_sha256"),
+            command_receipts,
         )
 
     def inpaint(
@@ -1306,6 +1392,69 @@ def _safe_api_error(response: httpx.Response) -> str:
 def _required_dict(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ApiError("image API returned a malformed response")
+    return value
+
+
+def _required_list(value: Any) -> list[Any]:
+    if not isinstance(value, list):
+        raise ApiError("image API returned a malformed response")
+    return value
+
+
+def _parse_named_paths(bindings: Sequence[str], *, kind: str) -> dict[str, Path]:
+    parsed: dict[str, Path] = {}
+    for binding in bindings:
+        name, separator, raw_path = binding.partition("=")
+        if not separator or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name) or not raw_path:
+            raise ApiError(f"{kind} bindings must use NAME=PATH")
+        if name in parsed:
+            raise ApiError(f"duplicate {kind} binding: {name}")
+        parsed[name] = Path(raw_path)
+    return parsed
+
+
+def _validate_deterministic_program(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ApiError("program JSON must be an object")
+    if value.get("revision") != "deterministic-edit-v1":
+        raise ApiError("program revision must be deterministic-edit-v1")
+    inputs = value.get("inputs")
+    if (
+        not isinstance(inputs, dict)
+        or not inputs
+        or len(inputs) > 16
+        or any(
+            not isinstance(name, str)
+            or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name)
+            or kind not in {"image", "mask"}
+            for name, kind in inputs.items()
+        )
+    ):
+        raise ApiError("program inputs must declare 1 to 16 named image or mask inputs")
+    if value.get("source_input") not in inputs or inputs[value["source_input"]] != "image":
+        raise ApiError("program source_input must name an image input")
+    commands = value.get("commands")
+    if not isinstance(commands, list) or not 1 <= len(commands) <= 64:
+        raise ApiError("program commands must contain 1 to 64 commands")
+    identities: list[str] = []
+    for command in commands:
+        if not isinstance(command, dict):
+            raise ApiError("each program command must be an object")
+        command_id = command.get("id")
+        operation = command.get("op")
+        if (
+            not isinstance(command_id, str)
+            or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", command_id)
+            or not isinstance(operation, str)
+            or not operation
+        ):
+            raise ApiError("each program command requires valid id and op strings")
+        identities.append(command_id)
+    if len(set(identities)) != len(identities):
+        raise ApiError("program command ids must be unique")
+    encoding = value.get("encoding")
+    if not isinstance(encoding, dict) or encoding.get("format") != "png":
+        raise ApiError("program encoding format must be png")
     return value
 
 

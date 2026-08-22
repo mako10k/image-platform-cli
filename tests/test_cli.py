@@ -276,3 +276,25 @@ def test_inpaint_surface_requires_explicit_mask_and_exposes_seed_profile() -> No
     assert arguments.profile == "inpaint-stable-diffusion-v1-5"
     assert arguments.safety_filter == "default"
     assert arguments.seed == 42
+
+
+def test_deterministic_program_surface_exposes_named_bindings_and_dry_run() -> None:
+    arguments = parser().parse_args(
+        [
+            "edit",
+            "run",
+            "--program",
+            "edit.json",
+            "--input",
+            "scene=scene.png",
+            "--mask",
+            "selection=mask.png",
+            "--dry-run",
+        ]
+    )
+
+    assert arguments.group == "edit" and arguments.command == "run"
+    assert arguments.program == Path("edit.json")
+    assert arguments.input == ["scene=scene.png"]
+    assert arguments.mask == ["selection=mask.png"]
+    assert arguments.output is None and arguments.dry_run is True

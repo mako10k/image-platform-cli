@@ -68,3 +68,4 @@ class DeterministicEditResult:
     width: int
     height: int
     program_sha256: str
+    command_receipts: tuple[tuple[str, str, str, str], ...] = ()

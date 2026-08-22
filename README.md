@@ -66,3 +66,10 @@ Inpaint also accepts `--safety-filter default|enabled|disabled`. Non-default mod
 when the authenticated server explicitly permits per-request control. The CLI verifies and prints
 the server-reported requested mode, effective mode, and outcome so equal-seed smoke comparisons can
 be measured. Servers remain filter-on and control-denied by default.
+
+`image edit run --program edit.json --input scene=scene.png --mask selection=mask.png -o
+result.png` executes the platform's complete `deterministic-edit-v1` contract. Bindings must exactly
+match the program's named image and mask inputs. The CLI verifies the output, input, command order,
+program, normalized-command, and per-command pixel hashes before writing the PNG. `--dry-run`
+validates bindings and emits stable compact JSON without authentication or an API request; omit
+`--output` in that mode.

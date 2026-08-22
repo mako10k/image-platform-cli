@@ -439,6 +439,72 @@ def test_composite_uses_native_image_operations_and_verifies_receipt(tmp_path: P
     assert edited.program_sha256 == "a" * 64
 
 
+def test_generic_deterministic_program_binds_inputs_and_verifies_command_hashes(
+    tmp_path: Path,
+) -> None:
+    source = valid_png(256, 256)
+    source_path = tmp_path / "source.png"
+    source_path.write_bytes(source)
+    program_path = tmp_path / "program.json"
+    program_path.write_text(
+        '{"revision":"deterministic-edit-v1","inputs":{"source":"image"},'
+        '"source_input":"source","commands":[{"id":"flip","op":"flip",'
+        '"axis":"horizontal"}],"encoding":{"format":"png"}}',
+        encoding="utf-8",
+    )
+    program_hash = "a" * 64
+    normalized_hash = "b" * 64
+    pixel_hash = "c" * 64
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/image-operations"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        assert '"source_input":"source"' in request.read().decode()
+        metadata = {
+            "sha256": hashlib.sha256(source).hexdigest(),
+            "mime_type": "image/png",
+            "size_bytes": len(source),
+            "width": 256,
+            "height": 256,
+        }
+        return httpx.Response(
+            200,
+            json={
+                "image": metadata,
+                "data_base64": base64.b64encode(source).decode("ascii"),
+                "receipt": {
+                    "contract_revision": "deterministic-edit-v1",
+                    "program_sha256": program_hash,
+                    "input_sha256s": {"source": hashlib.sha256(source).hexdigest()},
+                    "commands": [
+                        {
+                            "id": "flip",
+                            "op": "flip",
+                            "normalized_command_sha256": normalized_hash,
+                            "output_pixel_sha256": pixel_hash,
+                        }
+                    ],
+                    "output_sha256": hashlib.sha256(source).hexdigest(),
+                    "output_width": 256,
+                    "output_height": 256,
+                },
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        api = ImageApiClient(http, "https://api.example")
+        program, inputs, masks = api.load_deterministic_program(
+            program_path, input_bindings=[f"source={source_path}"], mask_bindings=[]
+        )
+        result = api.run_deterministic_program(
+            "access-secret", program=program, input_paths=inputs, mask_paths=masks
+        )
+
+    assert result.program_sha256 == program_hash
+    assert result.command_receipts == (("flip", "flip", normalized_hash, pixel_hash),)
+
+
 def test_inpaint_uses_explicit_mask_route_and_verifies_model_headers(tmp_path: Path) -> None:
     source = valid_png(256, 256)
     mask_buffer = BytesIO()

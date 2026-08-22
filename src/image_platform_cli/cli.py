@@ -163,6 +163,12 @@ def parser() -> argparse.ArgumentParser:
     )
     composite.add_argument("--opacity", type=Decimal, default=Decimal(1))
     composite.add_argument("--crop", type=_coordinates(4, "crop"))
+    run_program = edit_commands.add_parser("run")
+    run_program.add_argument("--program", type=Path, required=True)
+    run_program.add_argument("--input", action="append", default=[], metavar="NAME=PATH")
+    run_program.add_argument("--mask", action="append", default=[], metavar="NAME=PATH")
+    run_program.add_argument("--output", "-o", type=Path)
+    run_program.add_argument("--dry-run", action="store_true")
     inpaint = edit_commands.add_parser("inpaint")
     inpaint.add_argument("prompt")
     inpaint.add_argument("--input", type=Path, required=True)
@@ -348,6 +354,41 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     print(f"SHA-256: {composite_result.sha256}")
                     print(f"Program SHA-256: {composite_result.program_sha256}")
+                elif args.command == "run":
+                    program, inputs, masks = api.load_deterministic_program(
+                        args.program,
+                        input_bindings=args.input,
+                        mask_bindings=args.mask,
+                    )
+                    if args.dry_run:
+                        print(json.dumps(program, sort_keys=True, separators=(",", ":")))
+                    else:
+                        if args.output is None:
+                            raise CliError("--output is required unless --dry-run is used")
+                        require_available_output(args.output)
+                        program_result = api.run_deterministic_program(
+                            service.access_token(frozenset({"images:edit"})),
+                            program=program,
+                            input_paths=inputs,
+                            mask_paths=masks,
+                        )
+                        save_deterministic_edit(program_result, args.output)
+                        print(
+                            f"Saved {program_result.width}x{program_result.height} PNG "
+                            f"to {args.output}."
+                        )
+                        print(f"SHA-256: {program_result.sha256}")
+                        print(f"Program SHA-256: {program_result.program_sha256}")
+                        for (
+                            command_id,
+                            operation,
+                            normalized_sha,
+                            pixel_sha,
+                        ) in program_result.command_receipts:
+                            print(
+                                f"Command {command_id} ({operation}): "
+                                f"normalized={normalized_sha} pixels={pixel_sha}"
+                            )
                 else:
                     require_available_output(args.output)
                     inpainted = api.inpaint(
