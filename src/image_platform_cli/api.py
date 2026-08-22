@@ -585,6 +585,62 @@ class ImageApiClient:
         body = self._request_json("GET", f"/v1/artifacts/{_resource_id(artifact_id)}", access_token)
         return cast(dict[str, Any], _safe_projection(body))
 
+    def upload_artifact(
+        self,
+        access_token: str,
+        input_path: Path,
+        *,
+        namespace: str = "default",
+        kind: str = "image",
+    ) -> dict[str, Any]:
+        data, mime_type, width, height = _read_edit_input(input_path)
+        reserved = self._request_json(
+            "POST",
+            "/v1/uploads",
+            access_token,
+            json={"namespace": namespace, "kind": kind, "mime_type": mime_type},
+        )
+        artifact_id = _required_string(reserved, "artifact_id")
+        upload = _required_dict(reserved.get("upload"))
+        if _required_string(upload, "method") != "PUT":
+            raise ApiError("image API returned unsupported upload instructions")
+        upload_url = _required_string(upload, "url")
+        if urlsplit(upload_url).scheme != "https":
+            raise ApiError("image API returned an unsafe Artifact upload URL")
+        raw_headers = _required_dict(upload.get("headers"))
+        if any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in raw_headers.items()
+        ):
+            raise ApiError("image API returned malformed upload headers")
+        try:
+            response = self._http.put(
+                upload_url, content=data, headers=cast(dict[str, str], raw_headers)
+            )
+        except httpx.HTTPError as error:
+            raise ApiError("Artifact upload failed") from error
+        if not response.is_success:
+            raise ApiError(_safe_api_error(response))
+        digest = hashlib.sha256(data).hexdigest()
+        completed = self._request_json(
+            "POST",
+            f"/v1/uploads/{_resource_id(artifact_id)}/complete",
+            access_token,
+            json={
+                "sha256": digest,
+                "mime_type": mime_type,
+                "size_bytes": len(data),
+                "width": width,
+                "height": height,
+            },
+        )
+        if _required_string(completed, "artifact_id") != artifact_id:
+            raise ApiError("image API returned an inconsistent Artifact ID")
+        result = _required_dict(completed.get("result"))
+        metadata = _required_dict(result.get("artifact"))
+        _verify_artifact(data, mime_type, metadata)
+        return cast(dict[str, Any], _safe_projection(completed))
+
     def download_artifact(
         self, access_token: str, artifact_id: str, output: Path
     ) -> dict[str, Any]:

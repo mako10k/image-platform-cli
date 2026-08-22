@@ -153,6 +153,11 @@ def parser() -> argparse.ArgumentParser:
     artifact_download = artifact_commands.add_parser("download")
     artifact_download.add_argument("artifact_id")
     artifact_download.add_argument("--output", "-o", type=Path, required=True)
+    artifact_upload = artifact_commands.add_parser("upload")
+    artifact_upload.add_argument("input", type=Path)
+    artifact_upload.add_argument("--namespace", default="default")
+    artifact_upload.add_argument("--kind", choices=("image", "mask"), default="image")
+    artifact_upload.add_argument("--json", action="store_true")
     search = groups.add_parser("search")
     search.add_argument("query")
     search.add_argument("--namespace", default="default")
@@ -1153,7 +1158,12 @@ def _read_json_object(path: Path, name: str) -> dict[str, object]:
 def _run_artifact_command(
     args: argparse.Namespace, service: AuthService, api: ImageApiClient
 ) -> None:
-    token = service.access_token(frozenset({"artifacts:read"}))
+    required_scopes = (
+        frozenset({"batches:execute", "artifacts:read"})
+        if args.command == "upload"
+        else frozenset({"artifacts:read"})
+    )
+    token = service.access_token(required_scopes)
     if args.command == "list":
         result = api.list_artifacts(
             token,
@@ -1169,12 +1179,15 @@ def _run_artifact_command(
         _emit(result, args.json)
     elif args.command == "show":
         _emit(api.get_artifact(token, args.artifact_id), args.json)
-    else:
+    elif args.command == "download":
         result = api.download_artifact(token, args.artifact_id, args.output)
         artifact = result.get("result", {}).get("artifact", {})
         print(f"Saved Artifact {args.artifact_id} to {args.output}.")
         if isinstance(artifact, dict) and isinstance(artifact.get("sha256"), str):
             print(f"SHA-256: {artifact['sha256']}")
+    else:
+        result = api.upload_artifact(token, args.input, namespace=args.namespace, kind=args.kind)
+        _emit(result, args.json)
 
 
 def _run_batch_command(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:

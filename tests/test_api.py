@@ -886,6 +886,81 @@ def test_artifact_show_removes_signed_url_and_private_fields() -> None:
     assert result == {"artifact_id": "art_1", "result": {"artifact": {"sha256": "a" * 64}}}
 
 
+def test_artifact_upload_uses_signed_put_without_forwarding_oauth(tmp_path: Path) -> None:
+    data = valid_png(256, 256)
+    source = tmp_path / "source.png"
+    source.write_bytes(data)
+    digest = hashlib.sha256(data).hexdigest()
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/v1/uploads":
+            assert request.headers["Authorization"] == "Bearer access-secret"
+            assert json.loads(request.content) == {
+                "namespace": "references",
+                "kind": "image",
+                "mime_type": "image/png",
+            }
+            return httpx.Response(
+                201,
+                json={
+                    "artifact_id": "art_upload01",
+                    "state": "reserved",
+                    "upload": {
+                        "method": "PUT",
+                        "url": "https://objects.example/signed-upload",
+                        "headers": {"Content-Type": "image/png", "If-None-Match": "*"},
+                        "expires_at": "2026-08-22T23:00:00Z",
+                    },
+                },
+                request=request,
+            )
+        if request.url.host == "objects.example":
+            assert "Authorization" not in request.headers
+            assert request.content == data
+            return httpx.Response(200, request=request)
+        assert request.url.path == "/v1/uploads/art_upload01/complete"
+        assert request.headers["Authorization"] == "Bearer access-secret"
+        assert json.loads(request.content) == {
+            "sha256": digest,
+            "mime_type": "image/png",
+            "size_bytes": len(data),
+            "width": 256,
+            "height": 256,
+        }
+        return httpx.Response(
+            200,
+            json={
+                "artifact_id": "art_upload01",
+                "namespace": "references",
+                "kind": "image",
+                "state": "ready",
+                "result": {
+                    "url": "https://objects.example/signed-download",
+                    "artifact": {
+                        "artifact_id": "art_upload01",
+                        "sha256": digest,
+                        "mime_type": "image/png",
+                        "size_bytes": len(data),
+                        "width": 256,
+                        "height": 256,
+                    },
+                },
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").upload_artifact(
+            "access-secret", source, namespace="references"
+        )
+
+    assert result["artifact_id"] == "art_upload01"
+    assert "url" not in result["result"]
+    assert len(requests) == 3
+
+
 def test_job_show_removes_entire_nested_prompt_plan() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

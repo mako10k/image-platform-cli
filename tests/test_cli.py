@@ -333,11 +333,15 @@ def test_durable_resource_command_surface_is_bounded() -> None:
         ]
     )
     artifact = parser().parse_args(["artifact", "download", "art_1", "--output", "result.png"])
+    upload = parser().parse_args(
+        ["artifact", "upload", "input.png", "--namespace", "references", "--json"]
+    )
     search = parser().parse_args(["search", "blue cup", "--mime-type", "image/png", "--limit", "5"])
 
     assert jobs.group == "job" and jobs.command == "list"
     assert jobs.all_pages is True and jobs.max_items == 200
     assert artifact.output == Path("result.png")
+    assert upload.input == Path("input.png") and upload.namespace == "references"
     assert search.mime_type == ["image/png"] and search.limit == 5
 
 
