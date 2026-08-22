@@ -214,7 +214,9 @@ def parser() -> argparse.ArgumentParser:
         ),
     )
     image_to_image.add_argument("prompt", help="description of the desired final image")
-    image_to_image.add_argument("--input", type=Path, required=True)
+    image_to_image_input = image_to_image.add_mutually_exclusive_group(required=True)
+    image_to_image_input.add_argument("--input", type=Path)
+    image_to_image_input.add_argument("--artifact")
     image_to_image.add_argument("--output", "-o", type=Path, required=True)
     image_to_image.add_argument("--profile", default="i2i-stable-diffusion-v1-5")
     image_to_image.add_argument("--negative-prompt")
@@ -224,6 +226,13 @@ def parser() -> argparse.ArgumentParser:
     image_to_image.add_argument("--seed", type=int)
     image_to_image.add_argument("--width", type=int)
     image_to_image.add_argument("--height", type=int)
+    caption = groups.add_parser("caption", help="caption a local or Artifact image")
+    caption_input = caption.add_mutually_exclusive_group(required=True)
+    caption_input.add_argument("--input", type=Path)
+    caption_input.add_argument("--artifact")
+    caption.add_argument("--instruction", default="Describe this image concisely.")
+    caption.add_argument("--max-output-tokens", type=int, default=128)
+    caption.add_argument("--json", action="store_true")
     segment = edit_commands.add_parser("segment")
     segment.add_argument("--input", type=Path, required=True)
     selectors = segment.add_mutually_exclusive_group(required=True)
@@ -490,6 +499,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                     limit=args.limit,
                 )
                 _emit(result, args.json)
+            elif args.group == "caption":
+                scopes = {"images:understand"}
+                if args.artifact is not None:
+                    scopes.add("artifacts:read")
+                access_token = service.access_token(frozenset(scopes))
+                result = ImageApiClient(http, config.api_base_url).caption(
+                    access_token,
+                    input_path=args.input,
+                    artifact_id=args.artifact,
+                    instruction=args.instruction,
+                    max_output_tokens=args.max_output_tokens,
+                )
+                _emit(result, args.json)
             elif args.group == "batch":
                 _run_batch_command(args, service, ImageApiClient(http, config.api_base_url))
             elif args.group == "capabilities":
@@ -619,6 +641,7 @@ def _run_image_to_image(
         service.access_token(frozenset({"images:edit"})),
         prompt=args.prompt,
         input_path=args.input,
+        artifact_id=args.artifact,
         profile=args.profile,
         negative_prompt=args.negative_prompt,
         strength=args.strength,

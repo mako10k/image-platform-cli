@@ -109,7 +109,8 @@ class ImageApiClient:
         access_token: str,
         *,
         prompt: str,
-        input_path: Path,
+        input_path: Path | None = None,
+        artifact_id: str | None = None,
         profile: str,
         negative_prompt: str | None,
         strength: Decimal,
@@ -119,7 +120,8 @@ class ImageApiClient:
         width: int | None,
         height: int | None,
     ) -> GeneratedImage:
-        source, mime_type, _, _ = _read_edit_input(input_path)
+        if (input_path is None) == (artifact_id is None):
+            raise ApiError("exactly one image-to-image input or Artifact is required")
         effective_seed = _resolve_seed(seed)
         _validate_image_to_image_controls(
             prompt,
@@ -134,15 +136,21 @@ class ImageApiClient:
         payload: dict[str, object] = {
             "profile": profile,
             "prompt": prompt,
-            "input": {
-                "mime_type": mime_type,
-                "data_base64": base64.b64encode(source).decode("ascii"),
-            },
             "strength": str(strength),
             "guidance_scale": str(guidance_scale),
             "inference_steps": inference_steps,
             "seed": effective_seed,
         }
+        if input_path is not None:
+            source, mime_type, _, _ = _read_edit_input(input_path)
+            payload["input"] = {
+                "mime_type": mime_type,
+                "data_base64": base64.b64encode(source).decode("ascii"),
+            }
+        else:
+            if artifact_id is None:
+                raise AssertionError("validated image-to-image input is missing")
+            payload["artifact_id"] = _resource_id(artifact_id)
         if negative_prompt is not None:
             payload["negative_prompt"] = negative_prompt
         if width is not None and height is not None:
@@ -184,6 +192,37 @@ class ImageApiClient:
             model_id,
             model_revision,
         )
+
+    def caption(
+        self,
+        access_token: str,
+        *,
+        input_path: Path | None = None,
+        artifact_id: str | None = None,
+        instruction: str = "Describe this image concisely.",
+        max_output_tokens: int = 128,
+    ) -> dict[str, Any]:
+        if (input_path is None) == (artifact_id is None):
+            raise ApiError("exactly one caption input or Artifact is required")
+        if not instruction.strip() or len(instruction) > 2048:
+            raise ApiError("caption instruction must contain 1 to 2048 characters")
+        if not 1 <= max_output_tokens <= 512:
+            raise ApiError("max output tokens must be from 1 through 512")
+        payload: dict[str, object] = {
+            "instruction": instruction,
+            "max_output_tokens": max_output_tokens,
+        }
+        if input_path is not None:
+            source, mime_type, _, _ = _read_edit_input(input_path)
+            payload["input"] = {
+                "mime_type": mime_type,
+                "data_base64": base64.b64encode(source).decode("ascii"),
+            }
+        else:
+            if artifact_id is None:
+                raise AssertionError("validated caption input is missing")
+            payload["artifact_id"] = _resource_id(artifact_id)
+        return self._safe_json("POST", "/v1/captions", access_token, json=payload)
 
     def segment(
         self,

@@ -260,8 +260,84 @@ def test_image_to_image_rejects_invalid_input_before_request(tmp_path: Path) -> 
             width=None,
             height=None,
         )
-
     assert requests == []
+
+
+def test_image_to_image_accepts_artifact_input() -> None:
+    output = valid_png(512, 512)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["artifact_id"] == "art_source0001" and "input" not in payload
+        return httpx.Response(
+            200,
+            json={
+                "output": {
+                    "image": {
+                        "sha256": hashlib.sha256(output).hexdigest(),
+                        "mime_type": "image/png",
+                        "size_bytes": len(output),
+                        "width": 512,
+                        "height": 512,
+                    },
+                    "data_base64": base64.b64encode(output).decode("ascii"),
+                },
+                "receipt": {
+                    "profile": "i2i-stable-diffusion-v1-5",
+                    "model_id": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+                    "model_revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+                    "measured_compute_cost_usd": "0.001",
+                    "seed": 42,
+                    "controls": {
+                        "strength": "0.75",
+                        "negative_prompt_applied": False,
+                        "guidance_scale": "7.5",
+                        "inference_steps": 25,
+                        "width": 512,
+                        "height": 512,
+                    },
+                },
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").image_to_image(
+            "access-secret",
+            prompt="watercolor",
+            artifact_id="art_source0001",
+            profile="i2i-stable-diffusion-v1-5",
+            negative_prompt=None,
+            strength=Decimal("0.75"),
+            guidance_scale=Decimal("7.5"),
+            inference_steps=25,
+            seed=42,
+            width=None,
+            height=None,
+        )
+
+    assert result.seed == 42
+
+
+def test_caption_accepts_artifact_input() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/captions"
+        assert json.loads(request.content) == {
+            "artifact_id": "art_caption001",
+            "instruction": "Describe it.",
+            "max_output_tokens": 64,
+        }
+        return httpx.Response(200, json={"caption": "A navy rectangle."}, request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").caption(
+            "access-secret",
+            artifact_id="art_caption001",
+            instruction="Describe it.",
+            max_output_tokens=64,
+        )
+
+    assert result["caption"] == "A navy rectangle."
 
 
 def test_segment_uses_point_selector_and_verifies_mask_receipt(tmp_path: Path) -> None:

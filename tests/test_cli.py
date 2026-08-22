@@ -454,6 +454,21 @@ def test_image_to_image_surface_exposes_bounded_native_controls() -> None:
     assert arguments.steps == 30 and arguments.seed == 42
     assert arguments.width == 512 and arguments.height == 640
 
+    artifact_arguments = parser().parse_args(
+        [
+            "edit",
+            "image-to-image",
+            "watercolor",
+            "--artifact",
+            "art_source0001",
+            "--output",
+            "result.png",
+        ]
+    )
+    caption_arguments = parser().parse_args(["caption", "--artifact", "art_caption001", "--json"])
+    assert artifact_arguments.artifact == "art_source0001"
+    assert caption_arguments.artifact == "art_caption001"
+
 
 def test_image_to_image_help_explains_descriptive_prompt_semantics(
     capsys: pytest.CaptureFixture[str],
