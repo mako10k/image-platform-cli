@@ -168,6 +168,26 @@ def test_raster_adjust_dry_run_composes_stable_command_order(
     assert output.index('"op":"white_balance"') < output.index('"op":"tone"')
 
 
+def test_raster_grayscale_dry_run_emits_explicit_luminance_contract(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(
+        [
+            "edit",
+            "raster",
+            "grayscale",
+            "--input",
+            "scene.png",
+            "--dry-run",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert '"op":"grayscale"' in output
+    assert '"luminance":"rec709_linear_srgb_v1"' in output
+
+
 def test_raster_resize_fit_dry_run_resolves_exact_affine(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

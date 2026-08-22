@@ -79,6 +79,10 @@ HELP_GUIDANCE = {
             "image edit raster adjust --input scene.png --hue 15 --saturation 1.1 --contrast 1.05 -o adjusted.png",
         ),
     ),
+    ("edit", "raster", "grayscale"): (
+        "Convert visible pixels to exact equal RGB channels using frozen Rec. 709 luminance.",
+        ("image edit raster grayscale --input scene.png -o grayscale.png",),
+    ),
     ("edit", "verify"): (
         "Execute the same deterministic program twice and compare every receipt and output hash.",
         ("image edit verify --program edit.json --input scene=scene.png",),
@@ -319,6 +323,7 @@ def parser() -> argparse.ArgumentParser:
     raster_filter.add_argument("--radius", type=Decimal, required=True)
     raster_filter.add_argument("--amount", type=Decimal, default=Decimal(1))
     raster_adjust = raster_commands.add_parser("adjust")
+    raster_grayscale = raster_commands.add_parser("grayscale")
     raster_adjust.add_argument("--hue", type=Decimal)
     raster_adjust.add_argument("--saturation", type=Decimal)
     raster_adjust.add_argument("--temperature", type=int)
@@ -383,6 +388,7 @@ def parser() -> argparse.ArgumentParser:
         raster_crop,
         raster_filter,
         raster_adjust,
+        raster_grayscale,
         raster_auto_crop,
         raster_shape,
         raster_text,
@@ -1010,6 +1016,14 @@ def _run_raster(args: argparse.Namespace, service: AuthService, api: ImageApiCli
 
 
 def _raster_commands(args: argparse.Namespace) -> list[dict[str, object]]:
+    if args.raster_command == "grayscale":
+        return [
+            {
+                "id": "grayscale",
+                "op": "grayscale",
+                "luminance": "rec709_linear_srgb_v1",
+            }
+        ]
     if args.raster_command == "crop":
         x, y, width, height = args.rect
         if width <= 0 or height <= 0:
