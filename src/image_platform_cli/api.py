@@ -347,11 +347,14 @@ class ImageApiClient:
         mask_path: Path,
         profile: str,
         seed: int | None,
+        safety_filter: str = "default",
     ) -> GeneratedImage:
         image, image_mime, width, height = _read_edit_input(input_path)
         mask, mask_mime, mask_width, mask_height = _read_edit_input(mask_path)
         if profile != INPAINT_PROFILE:
             raise ApiError("unknown inpaint profile")
+        if safety_filter not in {"default", "enabled", "disabled"}:
+            raise ApiError("safety_filter must be default, enabled, or disabled")
         if not prompt.strip() or len(prompt) > 2048:
             raise ApiError("prompt must contain 1 to 2048 non-whitespace characters")
         if (width, height) != (mask_width, mask_height):
@@ -380,6 +383,7 @@ class ImageApiClient:
                     "grow_mask": "0",
                     "seed": str(effective_seed),
                     "output_format": "png",
+                    "safety_filter": safety_filter,
                 },
             )
         except httpx.HTTPError as error:
@@ -407,6 +411,16 @@ class ImageApiClient:
         ):
             raise ApiError("image API response integrity check failed")
         measured_compute_cost_usd = _required_header_decimal(response, "X-Image-Compute-Cost-Usd")
+        safety_filter_requested = _required_header(response, "X-Image-Safety-Filter-Requested")
+        safety_filter_effective = _required_header(response, "X-Image-Safety-Filter-Effective")
+        safety_filter_outcome = _required_header(response, "X-Image-Safety-Filter-Outcome")
+        if (
+            safety_filter_requested != safety_filter
+            or safety_filter_effective not in {"enabled", "disabled"}
+            or safety_filter_outcome
+            != ("passed" if safety_filter_effective == "enabled" else "not_run")
+        ):
+            raise ApiError("image API returned inconsistent safety filter evidence")
         return GeneratedImage(
             response.content,
             "image/png",
@@ -417,6 +431,9 @@ class ImageApiClient:
             measured_compute_cost_usd,
             INPAINT_MODEL,
             INPAINT_MODEL_REVISION,
+            safety_filter_requested,
+            safety_filter_effective,
+            safety_filter_outcome,
         )
 
     def list_jobs(
@@ -1335,6 +1352,13 @@ def _required_header_int(response: httpx.Response, name: str) -> int:
     if parsed < 0:
         raise ApiError("image API returned malformed image headers")
     return parsed
+
+
+def _required_header(response: httpx.Response, name: str) -> str:
+    value = response.headers.get(name)
+    if value is None or not value:
+        raise ApiError("image API returned malformed image headers")
+    return str(value)
 
 
 def _required_header_decimal(response: httpx.Response, name: str) -> Decimal:

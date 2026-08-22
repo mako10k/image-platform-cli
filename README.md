@@ -61,3 +61,8 @@ Synchronous I2I and explicit-mask inpaint print the verified output SHA-256, eff
 backend model and revision, and the server-provided measured compute cost. This cost is a measured
 estimate from the platform receipt, not a finalized cloud invoice. Inpaint retains the current
 contract: white mask pixels are repainted, black pixels are preserved, and `grow_mask=0`.
+
+Inpaint also accepts `--safety-filter default|enabled|disabled`. Non-default modes succeed only
+when the authenticated server explicitly permits per-request control. The CLI verifies and prints
+the server-reported requested mode, effective mode, and outcome so equal-seed smoke comparisons can
+be measured. Servers remain filter-on and control-denied by default.

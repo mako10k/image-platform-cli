@@ -472,6 +472,9 @@ def test_inpaint_uses_explicit_mask_route_and_verifies_model_headers(tmp_path: P
                 "X-Image-Width": "256",
                 "X-Image-Height": "256",
                 "X-Image-Compute-Cost-Usd": "0.000987",
+                "X-Image-Safety-Filter-Requested": "default",
+                "X-Image-Safety-Filter-Effective": "enabled",
+                "X-Image-Safety-Filter-Outcome": "passed",
             },
             request=request,
         )
@@ -490,6 +493,9 @@ def test_inpaint_uses_explicit_mask_route_and_verifies_model_headers(tmp_path: P
     assert image.sha256 == hashlib.sha256(result).hexdigest()
     assert image.measured_compute_cost_usd == Decimal("0.000987")
     assert image.model_id == "stable-diffusion-v1-5/stable-diffusion-inpainting"
+    assert image.safety_filter_requested == "default"
+    assert image.safety_filter_effective == "enabled"
+    assert image.safety_filter_outcome == "passed"
 
 
 def test_inpaint_rejects_mismatched_mask_before_request(tmp_path: Path) -> None:

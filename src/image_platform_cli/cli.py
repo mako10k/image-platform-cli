@@ -170,6 +170,11 @@ def parser() -> argparse.ArgumentParser:
     inpaint.add_argument("--output", "-o", type=Path, required=True)
     inpaint.add_argument("--profile", default="inpaint-stable-diffusion-v1-5")
     inpaint.add_argument("--seed", type=int)
+    inpaint.add_argument(
+        "--safety-filter",
+        choices=("default", "enabled", "disabled"),
+        default="default",
+    )
     return root
 
 
@@ -352,6 +357,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         mask_path=args.mask,
                         profile=args.profile,
                         seed=args.seed,
+                        safety_filter=args.safety_filter,
                     )
                     save_image(inpainted, args.output)
                     print(f"Saved {inpainted.width}x{inpainted.height} PNG to {args.output}.")
@@ -359,6 +365,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(f"Seed: {inpainted.seed}")
                     print(f"Model: {inpainted.model_id}@{inpainted.model_revision}")
                     print(f"Compute cost USD: {inpainted.measured_compute_cost_usd}")
+                    print(
+                        "Safety filter: "
+                        f"requested={inpainted.safety_filter_requested} "
+                        f"effective={inpainted.safety_filter_effective} "
+                        f"outcome={inpainted.safety_filter_outcome}"
+                    )
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),

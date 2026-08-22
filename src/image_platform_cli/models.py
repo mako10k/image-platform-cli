@@ -46,6 +46,9 @@ class GeneratedImage:
     measured_compute_cost_usd: Decimal | None = None
     model_id: str | None = None
     model_revision: str | None = None
+    safety_filter_requested: str | None = None
+    safety_filter_effective: str | None = None
+    safety_filter_outcome: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

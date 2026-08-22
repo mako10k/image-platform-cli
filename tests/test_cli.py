@@ -274,4 +274,5 @@ def test_inpaint_surface_requires_explicit_mask_and_exposes_seed_profile() -> No
     assert arguments.input == Path("scene.png") and arguments.mask == Path("mask.png")
     assert arguments.output == Path("repaired.png")
     assert arguments.profile == "inpaint-stable-diffusion-v1-5"
+    assert arguments.safety_filter == "default"
     assert arguments.seed == 42
