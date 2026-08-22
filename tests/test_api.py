@@ -1027,6 +1027,30 @@ def test_artifact_show_removes_signed_url_and_private_fields() -> None:
     assert result == {"artifact_id": "art_1", "result": {"artifact": {"sha256": "a" * 64}}}
 
 
+def test_artifact_delete_verifies_tombstone_receipt() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "DELETE"
+        assert request.url.path == "/v1/artifacts/art_1"
+        return httpx.Response(
+            200,
+            json={
+                "artifact_id": "art_1",
+                "state": "deleted",
+                "deleted_at": "2026-08-23T00:00:00Z",
+                "result": None,
+            },
+            request=request,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = ImageApiClient(http, "https://api.example").delete_artifact(
+            "access-secret", "art_1"
+        )
+
+    assert result["state"] == "deleted"
+    assert result["deleted_at"] == "2026-08-23T00:00:00Z"
+
+
 def test_artifact_upload_uses_signed_put_without_forwarding_oauth(tmp_path: Path) -> None:
     data = valid_png(256, 256)
     source = tmp_path / "source.png"

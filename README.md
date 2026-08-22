@@ -107,6 +107,12 @@ verifies the source, mask, output, profile, model revision, normalized radius, d
 SHA-256 receipt before writing the RGBA PNG. Detailed guidance is available through
 `image help edit matte-portrait`.
 
+`image artifact delete ARTIFACT_ID` tombstones only an unreferenced principal-owned Artifact. It
+requires typing the exact Artifact ID unless `--force` is supplied for automation. The server
+rejects Job input/output references, makes retries idempotent, and retains content-addressed object
+bytes because another Artifact may share them; the CLI verifies the returned deleted state and
+deletion timestamp.
+
 Advanced deterministic surfaces include `project-quad` for perspective placement with explicit
 composite modes and `mesh` for a bounded saved vertex/triangle JSON specification. The ordinary
 `composite` command also accepts `source_over`, `replace`, `multiply`, or `screen`. `image edit

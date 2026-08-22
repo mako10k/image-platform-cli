@@ -701,6 +701,18 @@ class ImageApiClient:
         body = self._request_json("GET", f"/v1/artifacts/{_resource_id(artifact_id)}", access_token)
         return cast(dict[str, Any], _safe_projection(body))
 
+    def delete_artifact(self, access_token: str, artifact_id: str) -> dict[str, Any]:
+        normalized_id = _resource_id(artifact_id)
+        body = self._request_json("DELETE", f"/v1/artifacts/{normalized_id}", access_token)
+        if (
+            _required_string(body, "artifact_id") != normalized_id
+            or _required_string(body, "state") != "deleted"
+            or not isinstance(body.get("deleted_at"), str)
+            or body.get("result") is not None
+        ):
+            raise ApiError("image API returned an inconsistent Artifact deletion receipt")
+        return cast(dict[str, Any], _safe_projection(body))
+
     def upload_artifact(
         self,
         access_token: str,

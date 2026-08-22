@@ -93,6 +93,13 @@ HELP_GUIDANCE = {
             "image edit matte-portrait --input portrait.png --person-mask person.png --uncertainty-radius 16 -o matte.png",
         ),
     ),
+    ("artifact", "delete"): (
+        "Tombstone an unreferenced Artifact; shared content bytes are retained by the server.",
+        (
+            "image artifact delete art_123",
+            "image artifact delete art_123 --force --json",
+        ),
+    ),
     ("batch",): (
         "Plan, launch, inspect, and download bounded generation Campaigns.",
         ("image help batch iterate", "image help batch evaluate", "image batch results ID"),
@@ -168,6 +175,14 @@ def parser() -> argparse.ArgumentParser:
     artifact_upload.add_argument("--namespace", default="default")
     artifact_upload.add_argument("--kind", choices=("image", "mask"), default="image")
     artifact_upload.add_argument("--json", action="store_true")
+    artifact_delete = artifact_commands.add_parser(
+        "delete", help="tombstone one unreferenced Artifact"
+    )
+    artifact_delete.add_argument("artifact_id")
+    artifact_delete.add_argument(
+        "--force", action="store_true", help="skip typing the Artifact ID for confirmation"
+    )
+    artifact_delete.add_argument("--json", action="store_true")
     search = groups.add_parser("search")
     search_query = search.add_mutually_exclusive_group(required=True)
     search_query.add_argument("query", nargs="?")
@@ -1327,7 +1342,7 @@ def _run_artifact_command(
 ) -> None:
     required_scopes = (
         frozenset({"batches:execute", "artifacts:read"})
-        if args.command == "upload"
+        if args.command in {"upload", "delete"}
         else frozenset({"artifacts:read"})
     )
     token = service.access_token(required_scopes)
@@ -1352,6 +1367,13 @@ def _run_artifact_command(
         print(f"Saved Artifact {args.artifact_id} to {args.output}.")
         if isinstance(artifact, dict) and isinstance(artifact.get("sha256"), str):
             print(f"SHA-256: {artifact['sha256']}")
+    elif args.command == "delete":
+        if not args.force:
+            confirmation = input(f"Type Artifact ID {args.artifact_id} to confirm tombstoning: ")
+            if confirmation != args.artifact_id:
+                raise CliError("Artifact deletion confirmation did not match")
+        result = api.delete_artifact(token, args.artifact_id)
+        _emit(result, args.json)
     else:
         result = api.upload_artifact(token, args.input, namespace=args.namespace, kind=args.kind)
         _emit(result, args.json)

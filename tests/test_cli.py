@@ -392,6 +392,7 @@ def test_durable_resource_command_surface_is_bounded() -> None:
     upload = parser().parse_args(
         ["artifact", "upload", "input.png", "--namespace", "references", "--json"]
     )
+    delete = parser().parse_args(["artifact", "delete", "art_1", "--force", "--json"])
     search = parser().parse_args(["search", "blue cup", "--mime-type", "image/png", "--limit", "5"])
     image_search = parser().parse_args(["search", "--image", "query.png"])
     artifact_search = parser().parse_args(["search", "--artifact", "art_1"])
@@ -400,6 +401,7 @@ def test_durable_resource_command_surface_is_bounded() -> None:
     assert jobs.all_pages is True and jobs.max_items == 200
     assert artifact.output == Path("result.png")
     assert upload.input == Path("input.png") and upload.namespace == "references"
+    assert delete.artifact_id == "art_1" and delete.force is True
     assert search.mime_type == ["image/png"] and search.limit == 5
     assert image_search.image == Path("query.png")
     assert artifact_search.artifact == "art_1"
