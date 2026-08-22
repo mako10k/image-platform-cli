@@ -7,6 +7,7 @@ from PIL import Image
 
 from image_platform_cli.cli import (
     DEFAULT_LOGIN_SCOPES,
+    _captured_input,
     _run_reproducibility_check,
     _show_help,
     main,
@@ -466,8 +467,46 @@ def test_image_to_image_surface_exposes_bounded_native_controls() -> None:
         ]
     )
     caption_arguments = parser().parse_args(["caption", "--artifact", "art_caption001", "--json"])
+    capture_arguments = parser().parse_args(
+        [
+            "caption",
+            "--input",
+            "local.png",
+            "--capture-input",
+            "--capture-namespace",
+            "references",
+        ]
+    )
     assert artifact_arguments.artifact == "art_source0001"
     assert caption_arguments.artifact == "art_caption001"
+    assert capture_arguments.capture_input is True
+    assert capture_arguments.capture_namespace == "references"
+
+
+def test_capture_input_uploads_once_and_returns_immutable_reference() -> None:
+    calls: list[tuple[str, Path, str, str]] = []
+
+    class FakeApi:
+        @staticmethod
+        def upload_artifact(
+            access_token: str, input_path: Path, *, namespace: str, kind: str
+        ) -> dict[str, str]:
+            calls.append((access_token, input_path, namespace, kind))
+            return {"artifact_id": "art_captured01"}
+
+    result = _captured_input(
+        SimpleNamespace(
+            capture_input=True,
+            input=Path("local.png"),
+            artifact=None,
+            capture_namespace="references",
+        ),
+        api=FakeApi(),  # type: ignore[arg-type]
+        access_token="access-secret",
+    )
+
+    assert result == (None, "art_captured01")
+    assert calls == [("access-secret", Path("local.png"), "references", "image")]
 
 
 def test_image_to_image_help_explains_descriptive_prompt_semantics(

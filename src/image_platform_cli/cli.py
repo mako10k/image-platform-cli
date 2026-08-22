@@ -217,6 +217,12 @@ def parser() -> argparse.ArgumentParser:
     image_to_image_input = image_to_image.add_mutually_exclusive_group(required=True)
     image_to_image_input.add_argument("--input", type=Path)
     image_to_image_input.add_argument("--artifact")
+    image_to_image.add_argument(
+        "--capture-input",
+        action="store_true",
+        help="upload --input as an Artifact and use that immutable reference",
+    )
+    image_to_image.add_argument("--capture-namespace", default="default")
     image_to_image.add_argument("--output", "-o", type=Path, required=True)
     image_to_image.add_argument("--profile", default="i2i-stable-diffusion-v1-5")
     image_to_image.add_argument("--negative-prompt")
@@ -230,6 +236,12 @@ def parser() -> argparse.ArgumentParser:
     caption_input = caption.add_mutually_exclusive_group(required=True)
     caption_input.add_argument("--input", type=Path)
     caption_input.add_argument("--artifact")
+    caption.add_argument(
+        "--capture-input",
+        action="store_true",
+        help="upload --input as an Artifact and caption that immutable reference",
+    )
+    caption.add_argument("--capture-namespace", default="default")
     caption.add_argument("--instruction", default="Describe this image concisely.")
     caption.add_argument("--max-output-tokens", type=int, default=128)
     caption.add_argument("--json", action="store_true")
@@ -501,16 +513,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _emit(result, args.json)
             elif args.group == "caption":
                 scopes = {"images:understand"}
-                if args.artifact is not None:
+                if args.artifact is not None or args.capture_input:
                     scopes.add("artifacts:read")
+                if args.capture_input:
+                    scopes.add("batches:execute")
                 access_token = service.access_token(frozenset(scopes))
+                input_path, artifact_id = _captured_input(
+                    args,
+                    api=ImageApiClient(http, config.api_base_url),
+                    access_token=access_token,
+                )
                 result = ImageApiClient(http, config.api_base_url).caption(
                     access_token,
-                    input_path=args.input,
-                    artifact_id=args.artifact,
+                    input_path=input_path,
+                    artifact_id=artifact_id,
                     instruction=args.instruction,
                     max_output_tokens=args.max_output_tokens,
                 )
+                if args.capture_input:
+                    result["input_artifact_id"] = artifact_id
                 _emit(result, args.json)
             elif args.group == "batch":
                 _run_batch_command(args, service, ImageApiClient(http, config.api_base_url))
@@ -637,11 +658,18 @@ def _run_image_to_image(
     args: argparse.Namespace, service: AuthService, api: ImageApiClient
 ) -> None:
     require_available_output(args.output)
+    scopes = {"images:edit"}
+    if args.artifact is not None or args.capture_input:
+        scopes.add("artifacts:read")
+    if args.capture_input:
+        scopes.add("batches:execute")
+    token = service.access_token(frozenset(scopes))
+    input_path, artifact_id = _captured_input(args, api=api, access_token=token)
     image = api.image_to_image(
-        service.access_token(frozenset({"images:edit"})),
+        token,
         prompt=args.prompt,
-        input_path=args.input,
-        artifact_id=args.artifact,
+        input_path=input_path,
+        artifact_id=artifact_id,
         profile=args.profile,
         negative_prompt=args.negative_prompt,
         strength=args.strength,
@@ -657,6 +685,30 @@ def _run_image_to_image(
     print(f"Seed: {image.seed}")
     print(f"Model: {image.model_id}@{image.model_revision}")
     print(f"Compute cost USD: {image.measured_compute_cost_usd}")
+    if args.capture_input:
+        print(f"Input Artifact: {artifact_id}")
+
+
+def _captured_input(
+    args: argparse.Namespace,
+    *,
+    api: ImageApiClient,
+    access_token: str,
+) -> tuple[Path | None, str | None]:
+    if not args.capture_input:
+        return args.input, args.artifact
+    if args.input is None or args.artifact is not None:
+        raise CliError("--capture-input requires --input and cannot be used with --artifact")
+    uploaded = api.upload_artifact(
+        access_token,
+        args.input,
+        namespace=args.capture_namespace,
+        kind="image",
+    )
+    artifact_id = uploaded.get("artifact_id")
+    if not isinstance(artifact_id, str):
+        raise CliError("Artifact upload response omitted artifact_id")
+    return None, artifact_id
 
 
 def _run_segmentation(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
