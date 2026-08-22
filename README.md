@@ -49,3 +49,15 @@ The OAuth token is sent only to the configured API origin and never to the signe
 `--wait 0` begins polling immediately. Waits from 61 through 120 seconds additionally require
 `--allow-long-wait`; the CLI intentionally has no option that disables polling. Live login and
 generation remain separately gated.
+
+## Editing semantics and receipts
+
+`image edit image-to-image` (`i2i`) uses descriptive Stable Diffusion 1.5 image-to-image. Its
+prompt describes the desired final image; it is not an instruction such as “remove the person”.
+Instruction editing is a separate platform capability backed by the `edit-flux2-klein-4b` profile.
+The I2I command keeps its existing strength `0.75`, guidance `7.5`, and 25-step defaults.
+
+Synchronous I2I and explicit-mask inpaint print the verified output SHA-256, effective seed,
+backend model and revision, and the server-provided measured compute cost. This cost is a measured
+estimate from the platform receipt, not a finalized cloud invoice. Inpaint retains the current
+contract: white mask pixels are repainted, black pixels are preserved, and `grow_mask=0`.

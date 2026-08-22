@@ -1,6 +1,8 @@
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from image_platform_cli.cli import DEFAULT_LOGIN_SCOPES, parser
 
 
@@ -155,6 +157,18 @@ def test_image_to_image_surface_exposes_bounded_native_controls() -> None:
     assert arguments.guidance_scale == Decimal(8)
     assert arguments.steps == 30 and arguments.seed == 42
     assert arguments.width == 512 and arguments.height == 640
+
+
+def test_image_to_image_help_explains_descriptive_prompt_semantics(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        parser().parse_args(["edit", "image-to-image", "--help"])
+
+    assert stopped.value.code == 0
+    output = capsys.readouterr().out
+    assert "desired final image" in output
+    assert "not an instruction-edit command" in output
 
 
 def test_segment_surface_supports_text_point_box_and_explicit_outputs() -> None:

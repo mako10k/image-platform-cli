@@ -158,6 +158,9 @@ class ImageApiClient:
         image = _verified_generated_image(data, metadata, effective_seed)
         receipt = _required_dict(body.get("receipt"))
         controls = _required_dict(receipt.get("controls"))
+        model_id = _required_string(receipt, "model_id")
+        model_revision = _required_string(receipt, "model_revision")
+        measured_compute_cost_usd = _required_decimal(receipt, "measured_compute_cost_usd")
         if (
             _required_string(receipt, "profile") != profile
             or _required_int(receipt, "seed") != effective_seed
@@ -169,7 +172,17 @@ class ImageApiClient:
             or _required_int(controls, "height") != image.height
         ):
             raise ApiError("image API returned inconsistent image-to-image receipt")
-        return image
+        return GeneratedImage(
+            image.data,
+            image.mime_type,
+            image.sha256,
+            image.width,
+            image.height,
+            image.seed,
+            measured_compute_cost_usd,
+            model_id,
+            model_revision,
+        )
 
     def segment(
         self,
@@ -393,8 +406,17 @@ class ImageApiClient:
             or (output_width, output_height) != (width, height)
         ):
             raise ApiError("image API response integrity check failed")
+        measured_compute_cost_usd = _required_header_decimal(response, "X-Image-Compute-Cost-Usd")
         return GeneratedImage(
-            response.content, "image/png", digest, output_width, output_height, returned_seed
+            response.content,
+            "image/png",
+            digest,
+            output_width,
+            output_height,
+            returned_seed,
+            measured_compute_cost_usd,
+            INPAINT_MODEL,
+            INPAINT_MODEL_REVISION,
         )
 
     def list_jobs(
@@ -1311,6 +1333,17 @@ def _required_header_int(response: httpx.Response, name: str) -> int:
     except ValueError as error:
         raise ApiError("image API returned malformed image headers") from error
     if parsed < 0:
+        raise ApiError("image API returned malformed image headers")
+    return parsed
+
+
+def _required_header_decimal(response: httpx.Response, name: str) -> Decimal:
+    value = response.headers.get(name)
+    try:
+        parsed = Decimal(value) if value is not None else Decimal(-1)
+    except InvalidOperation as error:
+        raise ApiError("image API returned malformed image headers") from error
+    if not parsed.is_finite() or parsed < 0:
         raise ApiError("image API returned malformed image headers")
     return parsed
 

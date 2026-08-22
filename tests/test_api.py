@@ -192,6 +192,9 @@ def test_image_to_image_uses_native_route_and_verifies_receipt(tmp_path: Path) -
                 },
                 "receipt": {
                     "profile": "i2i-stable-diffusion-v1-5",
+                    "model_id": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+                    "model_revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+                    "measured_compute_cost_usd": "0.001234",
                     "seed": 42,
                     "controls": {
                         "strength": "0.6",
@@ -224,6 +227,9 @@ def test_image_to_image_uses_native_route_and_verifies_receipt(tmp_path: Path) -
     assert image.data == result
     assert image.sha256 == hashlib.sha256(result).hexdigest()
     assert image.width == 512 and image.height == 640 and image.seed == 42
+    assert image.measured_compute_cost_usd == Decimal("0.001234")
+    assert image.model_id == "stable-diffusion-v1-5/stable-diffusion-v1-5"
+    assert image.model_revision == "451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
     assert len(requests) == 1
 
 
@@ -465,6 +471,7 @@ def test_inpaint_uses_explicit_mask_route_and_verifies_model_headers(tmp_path: P
                 "X-Image-Backend-Revision": "8a4288a76071f7280aedbdb3253bdb9e9d5d84bb",
                 "X-Image-Width": "256",
                 "X-Image-Height": "256",
+                "X-Image-Compute-Cost-Usd": "0.000987",
             },
             request=request,
         )
@@ -481,6 +488,8 @@ def test_inpaint_uses_explicit_mask_route_and_verifies_model_headers(tmp_path: P
 
     assert image.data == result and image.seed == 42
     assert image.sha256 == hashlib.sha256(result).hexdigest()
+    assert image.measured_compute_cost_usd == Decimal("0.000987")
+    assert image.model_id == "stable-diffusion-v1-5/stable-diffusion-inpainting"
 
 
 def test_inpaint_rejects_mismatched_mask_before_request(tmp_path: Path) -> None:

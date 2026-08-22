@@ -120,8 +120,15 @@ def parser() -> argparse.ArgumentParser:
     capabilities.add_argument("--json", action="store_true")
     edit = groups.add_parser("edit")
     edit_commands = edit.add_subparsers(dest="command", required=True)
-    image_to_image = edit_commands.add_parser("image-to-image", aliases=["i2i"])
-    image_to_image.add_argument("prompt")
+    image_to_image = edit_commands.add_parser(
+        "image-to-image",
+        aliases=["i2i"],
+        description=(
+            "Run descriptive Stable Diffusion image-to-image. PROMPT describes the desired "
+            "final image; it is not an instruction-edit command."
+        ),
+    )
+    image_to_image.add_argument("prompt", help="description of the desired final image")
     image_to_image.add_argument("--input", type=Path, required=True)
     image_to_image.add_argument("--output", "-o", type=Path, required=True)
     image_to_image.add_argument("--profile", default="i2i-stable-diffusion-v1-5")
@@ -288,6 +295,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(f"Saved {image.width}x{image.height} PNG to {args.output}.")
                     print(f"SHA-256: {image.sha256}")
                     print(f"Seed: {image.seed}")
+                    print(f"Model: {image.model_id}@{image.model_revision}")
+                    print(f"Compute cost USD: {image.measured_compute_cost_usd}")
                 elif args.command == "segment":
                     outputs = (args.mask_output, args.foreground_output, args.background_output)
                     selected_outputs = tuple(output for output in outputs if output is not None)
@@ -348,6 +357,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(f"Saved {inpainted.width}x{inpainted.height} PNG to {args.output}.")
                     print(f"SHA-256: {inpainted.sha256}")
                     print(f"Seed: {inpainted.seed}")
+                    print(f"Model: {inpainted.model_id}@{inpainted.model_revision}")
+                    print(f"Compute cost USD: {inpainted.measured_compute_cost_usd}")
             elif args.command == "login":
                 login_credential = service.login(
                     tuple(args.scope or DEFAULT_LOGIN_SCOPES),

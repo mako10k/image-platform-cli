@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +43,9 @@ class GeneratedImage:
     width: int
     height: int
     seed: int
+    measured_compute_cost_usd: Decimal | None = None
+    model_id: str | None = None
+    model_revision: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
