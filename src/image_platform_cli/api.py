@@ -47,6 +47,29 @@ EDIT_CAPABILITY_ROUTES = (
 )
 
 
+def load_deterministic_program(
+    program_path: Path,
+    *,
+    input_bindings: Sequence[str],
+    mask_bindings: Sequence[str],
+) -> tuple[dict[str, Any], dict[str, Path], dict[str, Path]]:
+    """Load and validate a local deterministic program without constructing transport."""
+    try:
+        raw = json.loads(program_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ApiError("program must be a readable UTF-8 JSON file") from error
+    program = _validate_deterministic_program(raw)
+    inputs = _parse_named_paths(input_bindings, kind="input")
+    masks = _parse_named_paths(mask_bindings, kind="mask")
+    if set(inputs) & set(masks):
+        raise ApiError("input and mask binding names must be distinct")
+    declared = _required_dict(program.get("inputs"))
+    actual_kinds = {**{name: "image" for name in inputs}, **{name: "mask" for name in masks}}
+    if declared != actual_kinds:
+        raise ApiError("named bindings must exactly match program inputs and kinds")
+    return program, inputs, masks
+
+
 class ImageApiClient:
     def __init__(
         self,
@@ -461,20 +484,11 @@ class ImageApiClient:
         input_bindings: Sequence[str],
         mask_bindings: Sequence[str],
     ) -> tuple[dict[str, Any], dict[str, Path], dict[str, Path]]:
-        try:
-            raw = json.loads(program_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise ApiError("program must be a readable UTF-8 JSON file") from error
-        program = _validate_deterministic_program(raw)
-        inputs = _parse_named_paths(input_bindings, kind="input")
-        masks = _parse_named_paths(mask_bindings, kind="mask")
-        if set(inputs) & set(masks):
-            raise ApiError("input and mask binding names must be distinct")
-        declared = _required_dict(program.get("inputs"))
-        actual_kinds = {**{name: "image" for name in inputs}, **{name: "mask" for name in masks}}
-        if declared != actual_kinds:
-            raise ApiError("named bindings must exactly match program inputs and kinds")
-        return program, inputs, masks
+        return load_deterministic_program(
+            program_path,
+            input_bindings=input_bindings,
+            mask_bindings=mask_bindings,
+        )
 
     def run_deterministic_program(
         self,

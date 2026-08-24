@@ -109,6 +109,75 @@ def test_replace_background_dry_run_inverts_foreground_mask(
     assert '"op":"invert"' in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [
+            "edit",
+            "replace-object",
+            "--base",
+            "base.png",
+            "--replacement",
+            "new.png",
+            "--mask",
+            "selection.png",
+            "--dry-run",
+        ],
+        [
+            "edit",
+            "raster",
+            "grayscale",
+            "--input",
+            "scene.png",
+            "--dry-run",
+        ],
+    ],
+)
+def test_cli_only_recipe_dry_run_does_not_construct_runtime_services(
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+) -> None:
+    def reject_runtime_construction(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("CLI-only dry-run must not construct runtime services")
+
+    monkeypatch.setattr("image_platform_cli.cli.Config.staging", reject_runtime_construction)
+
+    assert main(argv) == 0
+
+
+def test_cli_only_program_dry_run_does_not_construct_runtime_services(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    program = tmp_path / "program.json"
+    program.write_text(
+        '{"revision":"deterministic-edit-v1","inputs":{"source":"image"},'
+        '"source_input":"source","commands":[{"id":"flip","op":"flip",'
+        '"axis":"horizontal"}],"encoding":{"format":"png"}}',
+        encoding="utf-8",
+    )
+
+    def reject_runtime_construction(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("CLI-only dry-run must not construct runtime services")
+
+    monkeypatch.setattr("image_platform_cli.cli.Config.staging", reject_runtime_construction)
+
+    assert (
+        main(
+            [
+                "edit",
+                "run",
+                "--program",
+                str(program),
+                "--input",
+                "source=scene.png",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+
+
 def test_convert_surface_requires_explicit_format_and_quality() -> None:
     arguments = parser().parse_args(
         [

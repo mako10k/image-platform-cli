@@ -12,6 +12,7 @@ from PIL import Image, UnidentifiedImageError
 
 from .api import (
     ImageApiClient,
+    load_deterministic_program,
     require_available_output,
     save_deterministic_edit,
     save_image,
@@ -498,6 +499,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.group == "help":
         return _show_help(tuple(args.topic))
     try:
+        if _is_cli_only_dry_run(args):
+            _run_cli_only_dry_run(args)
+            return 0
         config = Config.staging()
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0)) as http:
             service = AuthService(
@@ -605,6 +609,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     except CliError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
+
+
+def _is_cli_only_dry_run(args: argparse.Namespace) -> bool:
+    return (
+        args.group == "edit"
+        and args.command in {"run", "replace-object", "replace-background", "raster"}
+        and bool(getattr(args, "dry_run", False))
+    )
+
+
+def _run_cli_only_dry_run(args: argparse.Namespace) -> None:
+    if args.command == "run":
+        program, _, _ = load_deterministic_program(
+            args.program,
+            input_bindings=args.input,
+            mask_bindings=args.mask,
+        )
+        print(json.dumps(program, sort_keys=True, separators=(",", ":")))
+    elif args.command in {"replace-object", "replace-background"}:
+        _run_replacement(args, None, None)
+    else:
+        _run_raster(args, None, None)
 
 
 def _show_help(topic: tuple[str, ...]) -> int:
@@ -849,9 +875,11 @@ def _run_composite(args: argparse.Namespace, service: AuthService, api: ImageApi
 
 
 def _run_deterministic_program(
-    args: argparse.Namespace, service: AuthService, api: ImageApiClient
+    args: argparse.Namespace,
+    service: AuthService | None,
+    api: ImageApiClient | None,
 ) -> None:
-    program, inputs, masks = api.load_deterministic_program(
+    program, inputs, masks = load_deterministic_program(
         args.program, input_bindings=args.input, mask_bindings=args.mask
     )
     if args.dry_run:
@@ -859,6 +887,8 @@ def _run_deterministic_program(
         return
     if args.output is None:
         raise CliError("--output is required unless --dry-run is used")
+    if service is None or api is None:
+        raise AssertionError("non-dry-run execution requires authenticated transport")
     require_available_output(args.output)
     result = api.run_deterministic_program(
         service.access_token(frozenset({"images:edit"})),
@@ -949,7 +979,11 @@ def _run_inpaint(args: argparse.Namespace, service: AuthService, api: ImageApiCl
     )
 
 
-def _run_replacement(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+def _run_replacement(
+    args: argparse.Namespace,
+    service: AuthService | None,
+    api: ImageApiClient | None,
+) -> None:
     background = args.command == "replace-background"
     _validate_replacement_controls(args)
     if background and len(args.mask) != 1:
@@ -993,6 +1027,8 @@ def _run_replacement(args: argparse.Namespace, service: AuthService, api: ImageA
         return
     if args.output is None:
         raise CliError("--output is required unless --dry-run is used")
+    if service is None or api is None:
+        raise AssertionError("non-dry-run execution requires authenticated transport")
     require_available_output(args.output)
     result = api.run_deterministic_program(
         service.access_token(frozenset({"images:edit"})),
@@ -1032,7 +1068,11 @@ def _validate_replacement_controls(args: argparse.Namespace) -> None:
         raise CliError("--feather must be greater than 0 and at most 64")
 
 
-def _run_raster(args: argparse.Namespace, service: AuthService, api: ImageApiClient) -> None:
+def _run_raster(
+    args: argparse.Namespace,
+    service: AuthService | None,
+    api: ImageApiClient | None,
+) -> None:
     commands = _raster_commands(args)
     input_paths, mask_paths = _raster_input_paths(args)
     program = {
@@ -1050,6 +1090,8 @@ def _run_raster(args: argparse.Namespace, service: AuthService, api: ImageApiCli
         return
     if args.output is None:
         raise CliError("--output is required unless --dry-run is used")
+    if service is None or api is None:
+        raise AssertionError("non-dry-run execution requires authenticated transport")
     require_available_output(args.output)
     result = api.run_deterministic_program(
         service.access_token(frozenset({"images:edit"})),
