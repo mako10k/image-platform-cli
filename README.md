@@ -122,3 +122,14 @@ dimensions, and every normalized-command and pixel receipt hash match.
 Run `./scripts/static-checks.sh` before committing. In addition to Ruff and strict mypy, it rejects
 cyclomatic-complexity regressions through Xenon and clone-code blocks of eight or more similar
 lines through Pylint. CI runs the same locked checks and the complete test suite.
+
+## License and contributions
+
+The CLI source and its repository-authored documentation are licensed under the
+[Apache License 2.0](LICENSE). Attribution information is in [NOTICE](NOTICE).
+Contributions require Developer Certificate of Origin 1.1 sign-off; see
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+This software license does not grant rights to platform service marks, models,
+weights, fonts, user inputs, generated outputs, or other external assets. Those
+remain governed by their applicable terms and recorded provenance.
