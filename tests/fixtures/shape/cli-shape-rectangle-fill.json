@@ -1,0 +1,134 @@
+{
+  "request": {
+    "inputs": {
+      "source": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIUlEQVR4nGO8Iyfy34LLppEBB2DCJ8nAwMDAhE9yyCgAAASpBBsxbRxCAAAAAElFTkSuQmCC"
+      }
+    },
+    "program": {
+      "revision": "deterministic-edit-v1",
+      "inputs": {
+        "source": "image"
+      },
+      "source_input": "source",
+      "semantics": {
+        "coordinate_system": "top_left_pixel_edges_integer_v1",
+        "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+        "alpha_representation": "straight",
+        "edge_color_policy": "preserve_unassociated_rgb_v1",
+        "white_point_adaptation": "bradford_v1",
+        "hue_wrap": "signed_degrees_modulo_360_v1",
+        "rounding": "round_half_even_u8_v1",
+        "gamut_mode": "clip"
+      },
+      "commands": [
+        {
+          "id": "draw-shape",
+          "op": "draw_shape",
+          "shape": "rectangle",
+          "rect": {
+            "x": 1,
+            "y": 1,
+            "width": 6,
+            "height": 5
+          },
+          "points": [],
+          "fill": {
+            "r": 255,
+            "g": 0,
+            "b": 0,
+            "a": 128
+          },
+          "stroke": null,
+          "stroke_width": 2,
+          "coverage": null
+        }
+      ],
+      "encoding": {
+        "format": "png",
+        "quality": 90,
+        "png_compress_level": 9,
+        "jpeg_subsampling": "4:4:4",
+        "progressive": false,
+        "webp_method": 6,
+        "strip_metadata": true,
+        "output_profile": "srgb",
+        "alpha_policy": "preserve_or_flatten_white_v1"
+      }
+    }
+  },
+  "body": {
+    "data": {
+      "image": {
+        "mime_type": "image/png",
+        "sha256": "8177188b5f3b6ca197a88ab38afbe8947d1c4ce5353030341db9c92275e862a2",
+        "size_bytes": 104,
+        "width": 8,
+        "height": 8
+      },
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAL0lEQVR42mO8Iyfy34LLppEBB2Cx4LJpnPv0tAM2yWRp0wNMDAQAHRSwwBxDtgkAvAIJktHtfDgAAAAASUVORK5CYII=",
+      "receipt": {
+        "contract_revision": "deterministic-edit-v1",
+        "limits_revision": "deterministic-edit-limits-v1",
+        "implementation_revision": "cpu-raster-color-edit-v2",
+        "program_sha256": "c254fc48176af502b1bce91bef52b48943d8cf0c57189a36a05cea4b2129ceda",
+        "input_sha256s": {
+          "source": "7e41b05dc54354bbf53ec43b5eea2aaeb0bd6129fc532a30b87ea7bea72f9ec4"
+        },
+        "commands": [
+          {
+            "id": "draw-shape",
+            "op": "draw_shape",
+            "normalized_command_sha256": "82b1f7ecf67eec0d04310ba3a3243b63632895a7004ac65aacb3c6e6ce8874dd",
+            "output_pixel_sha256": "6fc69b64d808fe6d565302bdbe7b4366360bcf3a9e57c7bd4780d05f7783e8b1"
+          }
+        ],
+        "output_sha256": "8177188b5f3b6ca197a88ab38afbe8947d1c4ce5353030341db9c92275e862a2",
+        "output_width": 8,
+        "output_height": 8
+      },
+      "planner_receipt": {
+        "contract_revision": "bounded-edit-planner-v1",
+        "implementation_revision": "split-and-fuse-in-order-v2",
+        "logical_program_sha256": "c254fc48176af502b1bce91bef52b48943d8cf0c57189a36a05cea4b2129ceda",
+        "physical_graph_sha256": "5d20b55d4acb630e773e3dadb10698aacafe6eaeef00ba93508d4d4372f37fd5",
+        "max_color_sample_work": 4194304,
+        "applied_rule_ids": [],
+        "nodes": [
+          {
+            "step_id": "image_ops_1",
+            "width": 8,
+            "height": 8,
+            "color_sample_work": 0,
+            "command_ids": [
+              "draw-shape"
+            ],
+            "fused_command_groups": [],
+            "program_sha256": "c254fc48176af502b1bce91bef52b48943d8cf0c57189a36a05cea4b2129ceda"
+          }
+        ]
+      },
+      "estimated_cost_usd": "0",
+      "actual_cost_usd": "0"
+    },
+    "meta": {
+      "request_id": "req_070d4c1f45884a1b882626f9ac67ab84",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "8177188b5f3b6ca197a88ab38afbe8947d1c4ce5353030341db9c92275e862a2",
+    "x-image-width": "8",
+    "x-image-height": "8",
+    "x-image-program-sha256": "c254fc48176af502b1bce91bef52b48943d8cf0c57189a36a05cea4b2129ceda",
+    "x-image-implementation-revision": "cpu-raster-color-edit-v2",
+    "x-image-logical-program-sha256": "c254fc48176af502b1bce91bef52b48943d8cf0c57189a36a05cea4b2129ceda",
+    "x-image-physical-graph-sha256": "5d20b55d4acb630e773e3dadb10698aacafe6eaeef00ba93508d4d4372f37fd5",
+    "content-length": "1742",
+    "content-type": "application/json",
+    "x-request-id": "req_070d4c1f45884a1b882626f9ac67ab84",
+    "cache-control": "no-store"
+  }
+}
