@@ -1,0 +1,128 @@
+{
+  "request": {
+    "program": {
+      "revision": "deterministic-edit-v1",
+      "inputs": {
+        "source": "image",
+        "reference": "image"
+      },
+      "source_input": "source",
+      "semantics": {
+        "coordinate_system": "top_left_pixel_edges_integer_v1",
+        "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+        "alpha_representation": "straight",
+        "edge_color_policy": "preserve_unassociated_rgb_v1",
+        "white_point_adaptation": "bradford_v1",
+        "hue_wrap": "signed_degrees_modulo_360_v1",
+        "rounding": "round_half_even_u8_v1",
+        "gamut_mode": "clip"
+      },
+      "commands": [
+        {
+          "id": "color-match",
+          "op": "color_match",
+          "reference_input": "reference",
+          "algorithm": "lab_histogram_256_v1",
+          "strength": "0.5",
+          "preserve_luminance": true,
+          "coverage": null
+        }
+      ],
+      "encoding": {
+        "format": "png",
+        "quality": 90,
+        "png_compress_level": 9,
+        "jpeg_subsampling": "4:4:4",
+        "progressive": false,
+        "webp_method": 6,
+        "strip_metadata": true,
+        "output_profile": "srgb",
+        "alpha_policy": "preserve_or_flatten_white_v1"
+      }
+    },
+    "inputs": {
+      "source": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIUlEQVR4nGO8Iyfy34LLppEBB2DCJ8nAwMDAhE9yyCgAAASpBBsxbRxCAAAAAElFTkSuQmCC"
+      },
+      "reference": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAIElEQVR4nGM8ITJtzpY5DAwMDAwMjCknjBhggIkBCQAAmIgEwfc/tOsAAAAASUVORK5CYII="
+      }
+    }
+  },
+  "body": {
+    "data": {
+      "image": {
+        "mime_type": "image/png",
+        "sha256": "da6933e842bcd922327e73727ff9b993fa7f451aa77ffdd9ba845ae8fa50e903",
+        "size_bytes": 91,
+        "width": 8,
+        "height": 8
+      },
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIklEQVR42mO8KyXwv+oZSyMDDsAYziDSwIAHMDEQAENCAQDTSATlTK290AAAAABJRU5ErkJggg==",
+      "receipt": {
+        "contract_revision": "deterministic-edit-v1",
+        "limits_revision": "deterministic-edit-limits-v1",
+        "implementation_revision": "cpu-raster-color-edit-v2",
+        "program_sha256": "c73ad3f93b9f07990299ef11bb0d2f58751dc0a402b36e34ba23ee80206fb685",
+        "input_sha256s": {
+          "source": "7e41b05dc54354bbf53ec43b5eea2aaeb0bd6129fc532a30b87ea7bea72f9ec4",
+          "reference": "6a2ac4f25208918b8bb3f2ce713f16ec0fce3f4883c434e72535beb2ec66ff04"
+        },
+        "commands": [
+          {
+            "id": "color-match",
+            "op": "color_match",
+            "normalized_command_sha256": "8ad891db64166cb1e932c0f944fc9fb198e8007e574d0018f6221364c4fae5a2",
+            "output_pixel_sha256": "2ff90d2cef6a1f74c46cad179552a12a8090d64e225830fbea9699efff904c2a"
+          }
+        ],
+        "output_sha256": "da6933e842bcd922327e73727ff9b993fa7f451aa77ffdd9ba845ae8fa50e903",
+        "output_width": 8,
+        "output_height": 8
+      },
+      "planner_receipt": {
+        "contract_revision": "bounded-edit-planner-v1",
+        "implementation_revision": "split-and-fuse-in-order-v2",
+        "logical_program_sha256": "c73ad3f93b9f07990299ef11bb0d2f58751dc0a402b36e34ba23ee80206fb685",
+        "physical_graph_sha256": "18eec8aa6137afdd778a2c274de828a93bccbb9b0dca97b7a7f9067683c18e85",
+        "max_color_sample_work": 4194304,
+        "applied_rule_ids": [],
+        "nodes": [
+          {
+            "step_id": "image_ops_1",
+            "width": 8,
+            "height": 8,
+            "color_sample_work": 140,
+            "command_ids": [
+              "color-match"
+            ],
+            "fused_command_groups": [],
+            "program_sha256": "c73ad3f93b9f07990299ef11bb0d2f58751dc0a402b36e34ba23ee80206fb685"
+          }
+        ]
+      },
+      "estimated_cost_usd": "0",
+      "actual_cost_usd": "0"
+    },
+    "meta": {
+      "request_id": "req_2948522f414c43cbae6e84fc3b0f1e8c",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "da6933e842bcd922327e73727ff9b993fa7f451aa77ffdd9ba845ae8fa50e903",
+    "x-image-width": "8",
+    "x-image-height": "8",
+    "x-image-program-sha256": "c73ad3f93b9f07990299ef11bb0d2f58751dc0a402b36e34ba23ee80206fb685",
+    "x-image-implementation-revision": "cpu-raster-color-edit-v2",
+    "x-image-logical-program-sha256": "c73ad3f93b9f07990299ef11bb0d2f58751dc0a402b36e34ba23ee80206fb685",
+    "x-image-physical-graph-sha256": "18eec8aa6137afdd778a2c274de828a93bccbb9b0dca97b7a7f9067683c18e85",
+    "content-length": "1809",
+    "content-type": "application/json",
+    "x-request-id": "req_2948522f414c43cbae6e84fc3b0f1e8c",
+    "cache-control": "no-store"
+  }
+}

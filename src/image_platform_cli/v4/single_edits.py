@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+from collections.abc import Mapping
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -29,16 +30,26 @@ def single_edit_program() -> dict[str, Any]:
 
 
 def prepare_single_edit(
-    path: Path, program: dict[str, Any]
+    path: Path, program: dict[str, Any], *, extra_inputs: Mapping[str, Path] | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    raw, mime, width, height = read_image(path)
-    payload = {
-        "program": program,
-        "inputs": {
-            "source": {"mime_type": mime, "data_base64": base64.b64encode(raw).decode("ascii")}
-        },
-    }
-    return payload, {"sha256": hashlib.sha256(raw).hexdigest(), "width": width, "height": height}
+    paths = {"source": path}
+    if extra_inputs:
+        if "source" in extra_inputs:
+            raise ApiError("extra inputs cannot replace the source")
+        paths.update(extra_inputs)
+    if set(paths) != set(program["inputs"]):
+        raise ApiError("image inputs must match the requested program")
+    inputs: dict[str, Any] = {}
+    hashes: dict[str, str] = {}
+    source: dict[str, Any] = {}
+    for name, input_path in paths.items():
+        raw, mime, width, height = read_image(input_path)
+        hashes[name] = hashlib.sha256(raw).hexdigest()
+        inputs[name] = {"mime_type": mime, "data_base64": base64.b64encode(raw).decode("ascii")}
+        if name == "source":
+            source = {"sha256": hashes[name], "width": width, "height": height}
+    source["input_sha256s"] = hashes
+    return {"program": program, "inputs": inputs}, source
 
 
 def verify_single_edit(
@@ -58,7 +69,7 @@ def verify_single_edit(
     program_hash = canonical_hash(program)
     requested_command = program["commands"][0]
     expected = {
-        "input_sha256s": {"source": source["sha256"]},
+        "input_sha256s": source["input_sha256s"],
         "program_sha256": program_hash,
         "output_sha256": image["sha256"],
         "output_width": output_size[0],
