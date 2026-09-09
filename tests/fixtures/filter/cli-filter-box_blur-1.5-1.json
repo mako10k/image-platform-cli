@@ -1,0 +1,122 @@
+{
+  "request": {
+    "inputs": {
+      "source": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIUlEQVR4nGO8Iyfy34LLppEBB2DCJ8nAwMDAhE9yyCgAAASpBBsxbRxCAAAAAElFTkSuQmCC"
+      }
+    },
+    "program": {
+      "revision": "deterministic-edit-v1",
+      "inputs": {
+        "source": "image"
+      },
+      "source_input": "source",
+      "semantics": {
+        "coordinate_system": "top_left_pixel_edges_integer_v1",
+        "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+        "alpha_representation": "straight",
+        "edge_color_policy": "preserve_unassociated_rgb_v1",
+        "white_point_adaptation": "bradford_v1",
+        "hue_wrap": "signed_degrees_modulo_360_v1",
+        "rounding": "round_half_even_u8_v1",
+        "gamut_mode": "clip"
+      },
+      "commands": [
+        {
+          "id": "filter",
+          "op": "filter",
+          "filter": "box_blur",
+          "radius": "1.5",
+          "amount": "1",
+          "border": "reflect",
+          "coverage": null
+        }
+      ],
+      "encoding": {
+        "format": "png",
+        "quality": 90,
+        "png_compress_level": 9,
+        "jpeg_subsampling": "4:4:4",
+        "progressive": false,
+        "webp_method": 6,
+        "strip_metadata": true,
+        "output_profile": "srgb",
+        "alpha_policy": "preserve_or_flatten_white_v1"
+      }
+    }
+  },
+  "body": {
+    "data": {
+      "image": {
+        "mime_type": "image/png",
+        "sha256": "d3e12fc950ccaea0dd90d2c9d3f7cbe27a34dcb95e066c46b4a329fd67116015",
+        "size_bytes": 128,
+        "width": 8,
+        "height": 8
+      },
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAR0lEQVR42mNMUTFf8J6B/ccNZu4PLxjYfjCgAaZ3DKw/PjEx/fr9n/EfAxbAcpOZ98NvBsZ/nxlY/mBVgM1YFCsYCAA6KAAAjWIVnZPmf80AAAAASUVORK5CYII=",
+      "receipt": {
+        "contract_revision": "deterministic-edit-v1",
+        "limits_revision": "deterministic-edit-limits-v1",
+        "implementation_revision": "cpu-raster-color-edit-v2",
+        "program_sha256": "4fe8498aba2402cdd04974d9100ba6f727f47c70d4d494a73b05fd1d999e0fa3",
+        "input_sha256s": {
+          "source": "7e41b05dc54354bbf53ec43b5eea2aaeb0bd6129fc532a30b87ea7bea72f9ec4"
+        },
+        "commands": [
+          {
+            "id": "filter",
+            "op": "filter",
+            "normalized_command_sha256": "2b01b1159ce3095328a5bf996fb5811b5ae4b7a8e53fd01c3b48ee2dca195558",
+            "output_pixel_sha256": "a0f734cc7fac0528729a50092ec46faf2f62a992ed82d06645704b374ebd20c1"
+          }
+        ],
+        "output_sha256": "d3e12fc950ccaea0dd90d2c9d3f7cbe27a34dcb95e066c46b4a329fd67116015",
+        "output_width": 8,
+        "output_height": 8
+      },
+      "planner_receipt": {
+        "contract_revision": "bounded-edit-planner-v1",
+        "implementation_revision": "split-and-fuse-in-order-v2",
+        "logical_program_sha256": "4fe8498aba2402cdd04974d9100ba6f727f47c70d4d494a73b05fd1d999e0fa3",
+        "physical_graph_sha256": "9526a5249495096d9784d98def8f8ab1fcc55c9fa7aa05365a5f08d46c645943",
+        "max_color_sample_work": 4194304,
+        "applied_rule_ids": [],
+        "nodes": [
+          {
+            "step_id": "image_ops_1",
+            "width": 8,
+            "height": 8,
+            "color_sample_work": 0,
+            "command_ids": [
+              "filter"
+            ],
+            "fused_command_groups": [],
+            "program_sha256": "4fe8498aba2402cdd04974d9100ba6f727f47c70d4d494a73b05fd1d999e0fa3"
+          }
+        ]
+      },
+      "estimated_cost_usd": "0",
+      "actual_cost_usd": "0"
+    },
+    "meta": {
+      "request_id": "req_174178218d5a46c5a1418969971ea6d2",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "d3e12fc950ccaea0dd90d2c9d3f7cbe27a34dcb95e066c46b4a329fd67116015",
+    "x-image-width": "8",
+    "x-image-height": "8",
+    "x-image-program-sha256": "4fe8498aba2402cdd04974d9100ba6f727f47c70d4d494a73b05fd1d999e0fa3",
+    "x-image-implementation-revision": "cpu-raster-color-edit-v2",
+    "x-image-logical-program-sha256": "4fe8498aba2402cdd04974d9100ba6f727f47c70d4d494a73b05fd1d999e0fa3",
+    "x-image-physical-graph-sha256": "9526a5249495096d9784d98def8f8ab1fcc55c9fa7aa05365a5f08d46c645943",
+    "content-length": "1762",
+    "content-type": "application/json",
+    "x-request-id": "req_174178218d5a46c5a1418969971ea6d2",
+    "cache-control": "no-store"
+  }
+}

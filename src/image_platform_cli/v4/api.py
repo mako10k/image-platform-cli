@@ -34,6 +34,7 @@ from ..common.models import (
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
 from .conversion import prepare_conversion
 from .crop import crop_program
+from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
@@ -99,6 +100,20 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def filter_image(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        kind: str,
+        radius: Decimal,
+        amount: Decimal = Decimal(1),
+    ) -> DeterministicEditResult:
+        payload, source = prepare_single_edit(input_path, filter_program(kind, radius, amount))
+        return self._single_image_operation(
+            access_token, payload, source, (source["width"], source["height"])
+        )
 
     def grayscale_image(self, access_token: str, *, input_path: Path) -> DeterministicEditResult:
         payload, source = prepare_single_edit(input_path, grayscale_program())
