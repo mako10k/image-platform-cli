@@ -10,20 +10,22 @@ from pathlib import Path
 import httpx
 from PIL import Image, UnidentifiedImageError
 
+from ..common.arguments import add_batch_plan_arguments, add_generation_arguments
+from ..common.auth_cli import run_auth_command
+from ..common.config import Config
+from ..common.credentials import KeyringCredentialStore
+from ..common.errors import CliError
+from ..common.files import require_available_output
+from ..common.oauth import DeviceFlowClient
+from ..common.service import AuthService
+from ..common.tokens import TokenValidator
 from .api import (
     ImageApiClient,
     load_deterministic_program,
-    require_available_output,
     save_deterministic_edit,
     save_image,
     save_segmentation_outputs,
 )
-from .config import Config
-from .credentials import KeyringCredentialStore
-from .errors import CliError
-from .oauth import DeviceFlowClient
-from .service import AuthService
-from .tokens import TokenValidator
 
 DEFAULT_LOGIN_SCOPES = (
     "images:generate",
@@ -128,14 +130,7 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("status")
     commands.add_parser("logout")
     generate = groups.add_parser("generate")
-    generate.add_argument("prompt")
-    generate.add_argument("--output", "-o", type=Path, required=True)
-    generate.add_argument("--width", type=int, default=1024)
-    generate.add_argument("--height", type=int, default=1024)
-    generate.add_argument("--seed", type=int)
-    generate.add_argument("--optimize", action="store_true")
-    generate.add_argument("--wait", type=int, default=30)
-    generate.add_argument("--allow-long-wait", action="store_true")
+    add_generation_arguments(generate)
     prompt = groups.add_parser("prompt")
     prompt_commands = prompt.add_subparsers(dest="command", required=True)
     optimize = prompt_commands.add_parser("optimize")
@@ -197,13 +192,7 @@ def parser() -> argparse.ArgumentParser:
     batch = groups.add_parser("batch")
     batch_commands = batch.add_subparsers(dest="command", required=True)
     batch_plan = batch_commands.add_parser("plan")
-    batch_plan.add_argument("intent")
-    batch_plan.add_argument("--width", type=int, default=1024)
-    batch_plan.add_argument("--height", type=int, default=1024)
-    batch_plan.add_argument("--count", type=int, default=1)
-    batch_plan.add_argument("--seed", type=int)
-    batch_plan.add_argument("--no-optimize", action="store_true")
-    batch_plan.add_argument("--json", action="store_true")
+    add_batch_plan_arguments(batch_plan)
     batch_run = batch_commands.add_parser("run")
     batch_run.add_argument("plan_id")
     batch_run.add_argument("--max-cost", type=Decimal, required=True)
@@ -586,25 +575,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _emit(result, args.json)
             elif args.group == "edit":
                 _run_edit_command(args, service, ImageApiClient(http, config.api_base_url))
-            elif args.command == "login":
-                login_credential = service.login(
-                    tuple(args.scope or DEFAULT_LOGIN_SCOPES),
-                    _announce,
-                )
-                print(
-                    f"Logged in as {login_credential.subject} for organization "
-                    f"{login_credential.organization_id}."
-                )
-            elif args.command == "status":
-                status_credential = service.status()
-                if status_credential is None:
-                    print("Not logged in.")
-                    return 1
-                print(f"User: {status_credential.subject}")
-                print(f"Organization: {status_credential.organization_id}")
-                print(f"Scopes: {' '.join(status_credential.scopes)}")
-            elif args.command == "logout":
-                print("Logged out." if service.logout() else "Not logged in.")
+            else:
+                return run_auth_command(args, service, DEFAULT_LOGIN_SCOPES, _announce)
         return 0
     except CliError as error:
         print(f"error: {error}", file=sys.stderr)
@@ -903,7 +875,7 @@ def _run_deterministic_program(
 
 
 def _print_deterministic_result(result: object, output: Path) -> None:
-    from .models import DeterministicEditResult
+    from ..common.models import DeterministicEditResult
 
     assert isinstance(result, DeterministicEditResult)
     format_name = {

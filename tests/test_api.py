@@ -9,15 +9,15 @@ import httpx
 import pytest
 from PIL import Image
 
-from image_platform_cli.api import (
+from image_platform_cli.common.errors import ApiError
+from image_platform_cli.common.files import require_available_output
+from image_platform_cli.common.models import SegmentationResult
+from image_platform_cli.v1.api import (
     ImageApiClient,
     _resolve_seed,
-    require_available_output,
     save_image,
     save_segmentation_outputs,
 )
-from image_platform_cli.errors import ApiError
-from image_platform_cli.models import SegmentationResult
 
 
 def png_header(width: int, height: int) -> bytes:
@@ -951,7 +951,7 @@ def test_generate_reports_only_safe_status_and_request_id() -> None:
 
 
 def test_unspecified_seed_resolves_to_random_nonzero_value(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("image_platform_cli.api.secrets.randbelow", lambda upper: upper - 2)
+    monkeypatch.setattr("image_platform_cli.v1.api.secrets.randbelow", lambda upper: upper - 2)
 
     assert _resolve_seed(None) == 2**63 - 2
     assert _resolve_seed(0) == 0

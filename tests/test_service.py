@@ -2,15 +2,15 @@ from dataclasses import dataclass
 
 import pytest
 
-from image_platform_cli.config import Config
-from image_platform_cli.errors import AuthenticationError
-from image_platform_cli.models import (
+from image_platform_cli.common.config import Config
+from image_platform_cli.common.errors import AuthenticationError
+from image_platform_cli.common.models import (
     DeviceAuthorization,
     StoredCredential,
     TokenSet,
     VerifiedToken,
 )
-from image_platform_cli.service import AuthService
+from image_platform_cli.common.service import AuthService
 
 
 @dataclass
@@ -50,18 +50,38 @@ class FakeValidator:
 
 class MemoryStore:
     def __init__(self) -> None:
-        self.value: StoredCredential | None = None
+        self.values: dict[str, StoredCredential] = {}
+        self.selections: dict[str, str] = {}
+
+    @property
+    def value(self) -> StoredCredential | None:
+        if not self.values:
+            return None
+        return next(iter(self.values.values()))
+
+    @value.setter
+    def value(self, credential: StoredCredential) -> None:
+        account = f"https://issuer|{credential.subject}|{credential.organization_id}"
+        self.values[account] = credential
+        self.selections["https://issuer|org_1"] = account
 
     def load(self, account: str) -> StoredCredential | None:
-        return self.value
+        return self.values.get(account)
 
     def save(self, account: str, credential: StoredCredential) -> None:
-        self.value = credential
+        self.values[account] = credential
 
     def delete(self, account: str) -> bool:
-        existed = self.value is not None
-        self.value = None
-        return existed
+        return self.values.pop(account, None) is not None
+
+    def selected_account(self, selector: str) -> str | None:
+        return self.selections.get(selector)
+
+    def select_account(self, selector: str, account: str) -> None:
+        self.selections[selector] = account
+
+    def clear_selection(self, selector: str) -> None:
+        self.selections.pop(selector, None)
 
 
 def config() -> Config:
@@ -89,6 +109,9 @@ def test_login_saves_refresh_only_after_access_token_validation() -> None:
     assert "access-secret" not in repr(credential)
     assert "refresh-secret" not in repr(credential)
     assert announced == [("CODE", "https://complete")]
+    account = "https://issuer|user_1|org_1"
+    assert store.values == {account: credential}
+    assert store.selections == {"https://issuer|org_1": account}
 
 
 def test_login_does_not_replace_existing_credential_on_validation_failure() -> None:
@@ -141,3 +164,33 @@ def test_failed_refreshed_token_validation_preserves_old_refresh_token() -> None
     with pytest.raises(AuthenticationError):
         service.access_token(frozenset({"images:generate"}))
     assert store.value == old
+
+
+def test_refresh_rejects_changed_subject_and_preserves_credential() -> None:
+    old = StoredCredential("old-refresh", "user_1", "org_1", ("images:generate",))
+    store = MemoryStore()
+    store.value = old
+    changed = VerifiedToken(
+        "user_2", "org_1", frozenset({"images:generate"}), 2_000_000_000, "session_2"
+    )
+    service = AuthService(
+        config(), FakeFlow(TokenSet("access-secret", "new-refresh")), FakeValidator(changed), store
+    )
+
+    with pytest.raises(AuthenticationError, match="subject"):
+        service.access_token(frozenset({"images:generate"}))
+    assert store.value == old
+    assert set(store.values) == {"https://issuer|user_1|org_1"}
+
+
+def test_status_rejects_selector_for_another_identity() -> None:
+    credential = StoredCredential("refresh", "user_1", "org_1", ())
+    store = MemoryStore()
+    store.values["https://issuer|user_2|org_1"] = credential
+    store.selections["https://issuer|org_1"] = "https://issuer|user_2|org_1"
+    service = AuthService(
+        config(), FakeFlow(TokenSet("access-secret", "refresh")), FakeValidator(None), store
+    )
+
+    with pytest.raises(AuthenticationError, match="identity"):
+        service.status()

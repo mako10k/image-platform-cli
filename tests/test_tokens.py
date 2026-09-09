@@ -6,8 +6,8 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from image_platform_cli.errors import AuthenticationError
-from image_platform_cli.tokens import TokenValidator
+from image_platform_cli.common.errors import AuthenticationError
+from image_platform_cli.common.tokens import TokenValidator
 
 ISSUER = "https://issuer.example"
 AUDIENCE = "api-audience"

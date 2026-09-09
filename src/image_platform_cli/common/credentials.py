@@ -10,12 +10,16 @@ from .errors import CredentialStoreError
 from .models import StoredCredential
 
 SERVICE = "image-platform"
+SELECTOR_SERVICE = "image-platform-selection"
 
 
 class CredentialStore(Protocol):
     def load(self, account: str) -> StoredCredential | None: ...
     def save(self, account: str, credential: StoredCredential) -> None: ...
     def delete(self, account: str) -> bool: ...
+    def selected_account(self, selector: str) -> str | None: ...
+    def select_account(self, selector: str, account: str) -> None: ...
+    def clear_selection(self, selector: str) -> None: ...
 
 
 class KeyringCredentialStore:
@@ -57,6 +61,26 @@ class KeyringCredentialStore:
         except (KeyringError, NoKeyringError) as error:
             raise CredentialStoreError("OS credential store delete failed") from error
         return True
+
+    def selected_account(self, selector: str) -> str | None:
+        try:
+            return self._backend.get_password(SELECTOR_SERVICE, selector)
+        except (KeyringError, NoKeyringError) as error:
+            raise CredentialStoreError("credential selection read failed") from error
+
+    def select_account(self, selector: str, account: str) -> None:
+        try:
+            self._backend.set_password(SELECTOR_SERVICE, selector, account)
+        except (KeyringError, NoKeyringError) as error:
+            raise CredentialStoreError("credential selection write failed") from error
+
+    def clear_selection(self, selector: str) -> None:
+        if self.selected_account(selector) is None:
+            return
+        try:
+            self._backend.delete_password(SELECTOR_SERVICE, selector)
+        except (KeyringError, NoKeyringError) as error:
+            raise CredentialStoreError("credential selection delete failed") from error
 
 
 def _required_string(body: object, name: str) -> str:

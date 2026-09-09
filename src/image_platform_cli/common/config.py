@@ -27,5 +27,10 @@ class Config:
         )
 
     @property
-    def credential_account(self) -> str:
+    def credential_selector_account(self) -> str:
         return f"{self.issuer}|{self.organization_id}"
+
+    def credential_account(self, subject: str) -> str:
+        if not subject or "|" in subject:
+            raise ValueError("credential subject is invalid")
+        return f"{self.issuer}|{subject}|{self.organization_id}"

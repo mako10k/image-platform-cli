@@ -43,30 +43,58 @@ class AuthService:
             organization_id=verified.organization_id,
             scopes=tuple(sorted(verified.scopes)),
         )
-        self._store.save(self._config.credential_account, credential)
+        account = self._config.credential_account(verified.subject)
+        self._store.save(account, credential)
+        self._store.select_account(self._config.credential_selector_account, account)
         return credential
 
     def status(self) -> StoredCredential | None:
-        return self._store.load(self._config.credential_account)
+        account = self._store.selected_account(self._config.credential_selector_account)
+        if account is None:
+            return None
+        credential = self._store.load(account)
+        if credential is None:
+            return None
+        self._validate_selected_credential(account, credential)
+        return credential
 
     def logout(self) -> bool:
-        return self._store.delete(self._config.credential_account)
+        selector = self._config.credential_selector_account
+        account = self._store.selected_account(selector)
+        if account is None:
+            return False
+        deleted = self._store.delete(account)
+        self._store.clear_selection(selector)
+        return deleted
 
     def access_token(self, required_scopes: frozenset[str]) -> str:
-        current = self._store.load(self._config.credential_account)
+        account = self._store.selected_account(self._config.credential_selector_account)
+        if account is None:
+            raise AuthenticationError("not logged in")
+        current = self._store.load(account)
         if current is None:
             raise AuthenticationError("not logged in")
+        self._validate_selected_credential(account, current)
         tokens = self._flow.refresh(current.refresh_token, current.scopes)
         verified = self._validator.validate(
             tokens.access_token,
             organization_id=self._config.organization_id,
             required_scopes=required_scopes,
         )
+        if verified.subject != current.subject:
+            raise AuthenticationError("refreshed token subject does not match stored credential")
         replacement = StoredCredential(
             refresh_token=tokens.refresh_token,
             subject=verified.subject,
             organization_id=verified.organization_id,
             scopes=tuple(sorted(verified.scopes)),
         )
-        self._store.save(self._config.credential_account, replacement)
+        self._store.save(account, replacement)
         return tokens.access_token
+
+    def _validate_selected_credential(self, account: str, credential: StoredCredential) -> None:
+        if (
+            credential.organization_id != self._config.organization_id
+            or account != self._config.credential_account(credential.subject)
+        ):
+            raise AuthenticationError("selected credential identity is invalid")
