@@ -139,7 +139,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.group == "help":
         return _show_help(args.topic)
     try:
-        if args.group == "edit" and args.command in {"run", "verify"} and prepare_cli_program(args):
+        if (
+            args.group == "edit"
+            and args.command in {"run", "verify", "replace-object", "replace-background"}
+            and prepare_cli_program(args)
+        ):
             return 0
         if args.group == "edit" and args.command == "raster":
             program = raster_program(args)
@@ -153,6 +157,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.group in {"generate", "edit"} and getattr(args, "command", None) not in {
             "run",
             "verify",
+            "replace-object",
+            "replace-background",
         }:
             require_available_output(args.output)
         config = Config.staging()

@@ -12,6 +12,7 @@ from ..common.errors import CliError
 from ..common.files import read_image, save_bytes_exclusive
 from ..common.geometry import _geometry_command
 from ..common.raster_programs import _raster_commands, _raster_input_paths
+from ..common.replacements import add_replacement_commands
 from ..common.service import AuthService
 from .api import V4ApiClient
 from .color_matching import ColorMatchOptions
@@ -32,6 +33,7 @@ from .text_drawing import TextOptions
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
     add_program_commands(commands)
+    add_replacement_commands(commands)
     composite = commands.add_parser("composite")
     for name in ("background", "overlay"):
         composite.add_argument(f"--{name}", type=Path, required=True)
@@ -171,7 +173,7 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
-    if args.command in {"run", "verify"}:
+    if args.command in {"run", "verify", "replace-object", "replace-background"}:
         run_cli_program(args, service, api)
         return
     if args.command == "composite":
