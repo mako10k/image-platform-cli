@@ -17,6 +17,7 @@ from .crop import crop_program
 from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions
+from .project_quad import QuadOptions
 from .segment_cli import add_segment_command, coordinates, run_segment
 from .shapes import ShapeOptions
 from .text_drawing import TextOptions
@@ -63,7 +64,15 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     )
     color_match.add_argument("--strength", type=Decimal, default=Decimal(1))
     color_match.add_argument("--preserve-luminance", action="store_true")
-    for operation in (crop, grayscale, filtering, shape, text, color_match):
+    quad = raster.add_parser("project-quad")
+    quad.add_argument("--texture", type=Path, required=True)
+    quad.add_argument("--destination", type=coordinates(8), required=True)
+    quad.add_argument(
+        "--composite",
+        choices=("source_over", "replace", "multiply", "screen"),
+        default="source_over",
+    )
+    for operation in (crop, grayscale, filtering, shape, text, color_match, quad):
         operation.add_argument("--input", type=Path, required=True)
         operation.add_argument("--output", "-o", type=Path)
         operation.add_argument("--dry-run", action="store_true")
@@ -103,7 +112,14 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
-        if args.raster_command == "color-match":
+        if args.raster_command == "project-quad":
+            raster_result = api.project_quad(
+                token,
+                input_path=args.input,
+                texture_path=args.texture,
+                options=QuadOptions(args.destination, args.composite),
+            )
+        elif args.raster_command == "color-match":
             raster_result = api.color_match(
                 token,
                 input_path=args.input,
@@ -198,6 +214,8 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
+    if args.raster_command == "project-quad":
+        return QuadOptions(args.destination, args.composite).program()
     if args.raster_command == "color-match":
         return color_match_options(args).program()
     if args.raster_command == "text":

@@ -1,0 +1,145 @@
+{
+  "request": {
+    "program": {
+      "revision": "deterministic-edit-v1",
+      "inputs": {
+        "source": "image",
+        "texture": "image"
+      },
+      "source_input": "source",
+      "semantics": {
+        "coordinate_system": "top_left_pixel_edges_integer_v1",
+        "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+        "alpha_representation": "straight",
+        "edge_color_policy": "preserve_unassociated_rgb_v1",
+        "white_point_adaptation": "bradford_v1",
+        "hue_wrap": "signed_degrees_modulo_360_v1",
+        "rounding": "round_half_even_u8_v1",
+        "gamut_mode": "clip"
+      },
+      "commands": [
+        {
+          "id": "project-quad",
+          "op": "project_quad",
+          "texture_input": "texture",
+          "destination": [
+            {
+              "x": 1,
+              "y": 1
+            },
+            {
+              "x": 7,
+              "y": 2
+            },
+            {
+              "x": 6,
+              "y": 7
+            },
+            {
+              "x": 2,
+              "y": 6
+            }
+          ],
+          "interpolation": "bilinear",
+          "composite": "multiply",
+          "coverage": null
+        }
+      ],
+      "encoding": {
+        "format": "png",
+        "quality": 90,
+        "png_compress_level": 9,
+        "jpeg_subsampling": "4:4:4",
+        "progressive": false,
+        "webp_method": 6,
+        "strip_metadata": true,
+        "output_profile": "srgb",
+        "alpha_policy": "preserve_or_flatten_white_v1"
+      }
+    },
+    "inputs": {
+      "source": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIUlEQVR4nGO8Iyfy34LLppEBB2DCJ8nAwMDAhE9yyCgAAASpBBsxbRxCAAAAAElFTkSuQmCC"
+      },
+      "texture": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAIElEQVR4nGM8ITJtzpY5DAwMDAwMjCknjBhggIkBCQAAmIgEwfc/tOsAAAAASUVORK5CYII="
+      }
+    }
+  },
+  "body": {
+    "data": {
+      "image": {
+        "mime_type": "image/png",
+        "sha256": "b15ebba04439c708d75c7a35d9fb4b32ac2eab45614c8fc85ae79dded38082a5",
+        "size_bytes": 171,
+        "width": 8,
+        "height": 8
+      },
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAcklEQVR42oWOPQqDMBiGH8MHYiBUoXPPkcHFk0lO1oMoeIMMOrRg6OeUUktKn/X9rebbVb3tAz8Qb/uwT8uYLpHkVlwznMwCoLKDGgC2x33MomuGIACpjWilxQkDYDsfXvXzJOQpwx/MZ+L74PtkqTpzAHOaHUynFM0aAAAAAElFTkSuQmCC",
+      "receipt": {
+        "contract_revision": "deterministic-edit-v1",
+        "limits_revision": "deterministic-edit-limits-v1",
+        "implementation_revision": "cpu-raster-color-edit-v2",
+        "program_sha256": "a3d3902c56fc2ffdd661f43d27cdf030061be0464a7d6e7f36e2359e08077f64",
+        "input_sha256s": {
+          "source": "7e41b05dc54354bbf53ec43b5eea2aaeb0bd6129fc532a30b87ea7bea72f9ec4",
+          "texture": "6a2ac4f25208918b8bb3f2ce713f16ec0fce3f4883c434e72535beb2ec66ff04"
+        },
+        "commands": [
+          {
+            "id": "project-quad",
+            "op": "project_quad",
+            "normalized_command_sha256": "6912710ca2c4d8fcbecffb25f731e4817365849ade0489ae95c20818d1a05c42",
+            "output_pixel_sha256": "aa9ed79e3f1ca6e0cf12c1e441432837a099ac37f94e713fb3ae0f75c6239b3c"
+          }
+        ],
+        "output_sha256": "b15ebba04439c708d75c7a35d9fb4b32ac2eab45614c8fc85ae79dded38082a5",
+        "output_width": 8,
+        "output_height": 8
+      },
+      "planner_receipt": {
+        "contract_revision": "bounded-edit-planner-v1",
+        "implementation_revision": "split-and-fuse-in-order-v2",
+        "logical_program_sha256": "a3d3902c56fc2ffdd661f43d27cdf030061be0464a7d6e7f36e2359e08077f64",
+        "physical_graph_sha256": "828c8a2d6f01f941ce4e78637afaa8466c6e69968df2210e4a04f02c599acb86",
+        "max_color_sample_work": 4194304,
+        "applied_rule_ids": [],
+        "nodes": [
+          {
+            "step_id": "image_ops_1",
+            "width": 8,
+            "height": 8,
+            "color_sample_work": 0,
+            "command_ids": [
+              "project-quad"
+            ],
+            "fused_command_groups": [],
+            "program_sha256": "a3d3902c56fc2ffdd661f43d27cdf030061be0464a7d6e7f36e2359e08077f64"
+          }
+        ]
+      },
+      "estimated_cost_usd": "0",
+      "actual_cost_usd": "0"
+    },
+    "meta": {
+      "request_id": "req_edbf38f360cd48edae1944ab0ea6be10",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "b15ebba04439c708d75c7a35d9fb4b32ac2eab45614c8fc85ae79dded38082a5",
+    "x-image-width": "8",
+    "x-image-height": "8",
+    "x-image-program-sha256": "a3d3902c56fc2ffdd661f43d27cdf030061be0464a7d6e7f36e2359e08077f64",
+    "x-image-implementation-revision": "cpu-raster-color-edit-v2",
+    "x-image-logical-program-sha256": "a3d3902c56fc2ffdd661f43d27cdf030061be0464a7d6e7f36e2359e08077f64",
+    "x-image-physical-graph-sha256": "828c8a2d6f01f941ce4e78637afaa8466c6e69968df2210e4a04f02c599acb86",
+    "content-length": "1913",
+    "content-type": "application/json",
+    "x-request-id": "req_edbf38f360cd48edae1944ab0ea6be10",
+    "cache-control": "no-store"
+  }
+}
