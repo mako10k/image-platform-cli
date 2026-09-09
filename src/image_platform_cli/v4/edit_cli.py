@@ -12,10 +12,12 @@ from ..common.files import read_image, save_bytes_exclusive
 from ..common.service import AuthService
 from .api import V4ApiClient
 from .image_edits import ImageToImageOptions
+from .segment_cli import add_segment_command, run_segment
 
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
+    add_segment_command(commands)
     inpaint = commands.add_parser("inpaint")
     for name in ("input", "mask", "output"):
         inpaint.add_argument(f"--{name}", type=Path, required=True)
@@ -44,6 +46,9 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
+    if args.command == "segment":
+        run_segment(args, service, api)
+        return
     if args.command == "inpaint":
         result = api.inpaint(
             service.access_token(frozenset({"images:edit"})),

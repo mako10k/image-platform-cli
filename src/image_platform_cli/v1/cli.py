@@ -17,6 +17,7 @@ from ..common.credentials import KeyringCredentialStore
 from ..common.errors import CliError
 from ..common.files import require_available_output
 from ..common.oauth import DeviceFlowClient
+from ..common.segmentation import save_segmentation_outputs
 from ..common.service import AuthService
 from ..common.tokens import TokenValidator
 from .api import (
@@ -24,7 +25,6 @@ from .api import (
     load_deterministic_program,
     save_deterministic_edit,
     save_image,
-    save_segmentation_outputs,
 )
 
 DEFAULT_LOGIN_SCOPES = (
