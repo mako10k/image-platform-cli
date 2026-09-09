@@ -25,10 +25,11 @@ from ..common.inputs import (
     require_one_image_source,
     validate_caption_controls,
 )
-from ..common.models import GeneratedImage, SegmentationResult
+from ..common.models import GeneratedImage, PortraitMattingResult, SegmentationResult
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
+from .matting import prepare_matting, verify_matting
 from .protocol import route_contract, verify_response
 from .segmentation import SegmentSelector, prepare_segment, verify_segment
 
@@ -89,6 +90,22 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def portrait_matting(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        person_mask_path: Path,
+        uncertainty_radius: int = 16,
+    ) -> PortraitMattingResult:
+        payload, inputs = prepare_matting(input_path, person_mask_path, uncertainty_radius)
+        response, envelope = self._exchange(
+            "POST", "/v4/portrait-mattings", access_token, json=payload
+        )
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        return verify_matting(response, self._object(envelope["data"]), inputs, uncertainty_radius)
 
     def segment(
         self,
