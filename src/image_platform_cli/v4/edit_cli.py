@@ -18,6 +18,11 @@ from .segment_cli import add_segment_command, run_segment
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
     add_segment_command(commands)
+    matte = commands.add_parser("matte-portrait")
+    matte.add_argument("--input", type=Path, required=True)
+    matte.add_argument("--person-mask", type=Path, required=True)
+    matte.add_argument("--uncertainty-radius", type=int, default=16)
+    matte.add_argument("--output", "-o", type=Path, required=True)
     inpaint = commands.add_parser("inpaint")
     for name in ("input", "mask", "output"):
         inpaint.add_argument(f"--{name}", type=Path, required=True)
@@ -46,6 +51,16 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
+    if args.command == "matte-portrait":
+        matte = api.portrait_matting(
+            service.access_token(frozenset({"images:edit"})),
+            input_path=args.input,
+            person_mask_path=args.person_mask,
+            uncertainty_radius=args.uncertainty_radius,
+        )
+        save_bytes_exclusive(matte.data, args.output)
+        print(f"Saved {matte.width}x{matte.height} portrait matte to {args.output}.")
+        return
     if args.command == "segment":
         run_segment(args, service, api)
         return

@@ -1,0 +1,68 @@
+{
+  "request": {
+    "image": {
+      "mime_type": "image/png",
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGNkYGhgwAaYsIoOWgkAaYgAkK2VydMAAAAASUVORK5CYII="
+    },
+    "person_mask": {
+      "mime_type": "image/png",
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAEElEQVR4nGP8zwABTAwUMQBJQQEPeWDz+AAAAABJRU5ErkJggg=="
+    },
+    "uncertainty_radius": 16
+  },
+  "body": {
+    "data": {
+      "output": {
+        "image": {
+          "mime_type": "image/png",
+          "sha256": "c8c0e248baf73887486c5fe807f59ea9e8e54782f3fe554aeeacfbcebd11b562",
+          "size_bytes": 78,
+          "width": 8,
+          "height": 8
+        },
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFUlEQVR4nGNkYGj4z4AHMOGTHD4KAI7TAY8tA/HKAAAAAElFTkSuQmCC"
+      },
+      "receipt": {
+        "contract_revision": "portrait-matting-v1",
+        "profile": "portrait-matting-birefnet-v1",
+        "model_id": "ZhengPeng7/BiRefNet-matting",
+        "model_revision": "57f9f68b43ba337c75762b14cf3075d659007268",
+        "input_image": {
+          "sha256": "f42b225d76ff9ceefe86fd315ff10eeda188059cf1f05246d4682e46abed8112",
+          "width": 8,
+          "height": 8
+        },
+        "person_mask": {
+          "sha256": "9d949974a4170d851d07da121faad6d6a23c1e5bd27c9a0d1ac57436205f493b",
+          "width": 8,
+          "height": 8
+        },
+        "output_image": {
+          "sha256": "c8c0e248baf73887486c5fe807f59ea9e8e54782f3fe554aeeacfbcebd11b562",
+          "width": 8,
+          "height": 8
+        },
+        "uncertainty_radius": 16,
+        "cold_start": false,
+        "model_load_seconds": "0",
+        "inference_seconds": "0.1",
+        "measured_compute_cost_usd": "0.0001"
+      }
+    },
+    "meta": {
+      "request_id": "req_d3beacde2dc44eb5824f31bb97442c72",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "c8c0e248baf73887486c5fe807f59ea9e8e54782f3fe554aeeacfbcebd11b562",
+    "x-image-model": "ZhengPeng7/BiRefNet-matting",
+    "x-image-model-revision": "57f9f68b43ba337c75762b14cf3075d659007268",
+    "x-image-compute-cost-usd": "0.0001",
+    "content-length": "1071",
+    "content-type": "application/json",
+    "x-request-id": "req_d3beacde2dc44eb5824f31bb97442c72",
+    "cache-control": "no-store"
+  }
+}
