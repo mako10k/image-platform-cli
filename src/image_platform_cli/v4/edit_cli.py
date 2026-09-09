@@ -13,6 +13,7 @@ from ..common.files import read_image, save_bytes_exclusive
 from ..common.service import AuthService
 from .api import V4ApiClient
 from .crop import crop_program
+from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions
 from .segment_cli import add_segment_command, coordinates, run_segment
@@ -29,7 +30,13 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     crop = raster.add_parser("crop")
     crop.add_argument("--rect", type=coordinates(4), required=True)
     grayscale = raster.add_parser("grayscale")
-    for operation in (crop, grayscale):
+    filtering = raster.add_parser("filter")
+    filtering.add_argument(
+        "--kind", choices=("gaussian_blur", "box_blur", "unsharp_mask"), required=True
+    )
+    filtering.add_argument("--radius", type=Decimal, required=True)
+    filtering.add_argument("--amount", type=Decimal, default=Decimal(1))
+    for operation in (crop, grayscale, filtering):
         operation.add_argument("--input", type=Path, required=True)
         operation.add_argument("--output", "-o", type=Path)
         operation.add_argument("--dry-run", action="store_true")
@@ -69,7 +76,11 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
-        if args.raster_command == "grayscale":
+        if args.raster_command == "filter":
+            raster_result = api.filter_image(
+                token, input_path=args.input, kind=args.kind, radius=args.radius, amount=args.amount
+            )
+        elif args.raster_command == "grayscale":
             raster_result = api.grayscale_image(token, input_path=args.input)
         else:
             raster_result = api.crop_image(token, input_path=args.input, rect=args.rect)
@@ -147,6 +158,8 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
+    if args.raster_command == "filter":
+        return filter_program(args.kind, args.radius, args.amount)
     if args.raster_command == "grayscale":
         return grayscale_program()
     return crop_program(args.rect)
