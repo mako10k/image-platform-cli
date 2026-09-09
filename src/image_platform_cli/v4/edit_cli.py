@@ -19,6 +19,7 @@ from .crop import crop_program
 from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions
+from .program_cli import add_program_commands, run_cli_program
 from .project_quad import QuadOptions
 from .segment_cli import add_segment_command, coordinates, run_segment
 from .shapes import ShapeOptions
@@ -28,6 +29,7 @@ from .text_drawing import TextOptions
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
+    add_program_commands(commands)
     composite = commands.add_parser("composite")
     for name in ("background", "overlay"):
         composite.add_argument(f"--{name}", type=Path, required=True)
@@ -152,6 +154,9 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
+    if args.command in {"run", "verify"}:
+        run_cli_program(args, service, api)
+        return
     if args.command == "composite":
         composited = api.composite_image(
             service.access_token(frozenset({"images:edit"})),

@@ -41,6 +41,8 @@ from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
 from .matting import prepare_matting, verify_matting
+from .program_execution import prepare_program, verify_program
+from .program_schema import normalize_program
 from .project_quad import QuadOptions
 from .protocol import route_contract, verify_response
 from .segmentation import SegmentSelector, prepare_segment, verify_segment
@@ -105,6 +107,18 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def run_program(
+        self, access_token: str, *, program: dict[str, Any], paths: Mapping[str, Path]
+    ) -> DeterministicEditResult:
+        normalized = normalize_program(program)
+        payload, inputs = prepare_program(normalized, paths)
+        response, envelope = self._exchange(
+            "POST", "/v4/image-operations", access_token, json=payload
+        )
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        return verify_program(response, self._object(envelope["data"]), normalized, inputs)
 
     def geometry_image(
         self, access_token: str, *, input_path: Path, program: dict[str, Any]
