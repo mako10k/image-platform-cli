@@ -18,6 +18,7 @@ from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions
 from .segment_cli import add_segment_command, coordinates, run_segment
 from .shapes import ShapeOptions
+from .text_drawing import TextOptions
 
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -43,7 +44,16 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     shape.add_argument("--fill", type=coordinates(4))
     shape.add_argument("--stroke", type=coordinates(4))
     shape.add_argument("--stroke-width", type=int, default=1)
-    for operation in (crop, grayscale, filtering, shape):
+    text = raster.add_parser("text")
+    text.add_argument("text")
+    text.add_argument("--position", type=coordinates(2), required=True)
+    text.add_argument("--font-id", required=True)
+    text.add_argument("--font-sha256", required=True)
+    text.add_argument("--font-size", type=int, required=True)
+    text.add_argument("--fill", type=coordinates(4), required=True)
+    text.add_argument("--stroke", type=coordinates(4))
+    text.add_argument("--stroke-width", type=int, default=0)
+    for operation in (crop, grayscale, filtering, shape, text):
         operation.add_argument("--input", type=Path, required=True)
         operation.add_argument("--output", "-o", type=Path)
         operation.add_argument("--dry-run", action="store_true")
@@ -83,7 +93,9 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
-        if args.raster_command == "shape":
+        if args.raster_command == "text":
+            raster_result = api.draw_text(token, input_path=args.input, options=text_options(args))
+        elif args.raster_command == "shape":
             raster_result = api.draw_shape(
                 token, input_path=args.input, options=shape_options(args)
             )
@@ -169,6 +181,8 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
+    if args.raster_command == "text":
+        return text_options(args).program()
     if args.raster_command == "shape":
         return shape_options(args).program()
     if args.raster_command == "filter":
@@ -180,3 +194,16 @@ def raster_program(args: argparse.Namespace) -> dict[str, Any]:
 
 def shape_options(args: argparse.Namespace) -> ShapeOptions:
     return ShapeOptions(args.kind, args.rect, args.fill, args.stroke, args.stroke_width)
+
+
+def text_options(args: argparse.Namespace) -> TextOptions:
+    return TextOptions(
+        args.text,
+        args.position,
+        args.font_id,
+        args.font_sha256,
+        args.font_size,
+        args.fill,
+        args.stroke,
+        args.stroke_width,
+    )

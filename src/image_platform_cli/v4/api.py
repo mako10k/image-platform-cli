@@ -43,6 +43,7 @@ from .protocol import route_contract, verify_response
 from .segmentation import SegmentSelector, prepare_segment, verify_segment
 from .shapes import ShapeOptions
 from .single_edits import prepare_single_edit, verify_single_edit
+from .text_drawing import TextOptions
 
 API_VERSION = "4"
 CONTRACT_REVISION = "2026-09-09-r8"
@@ -101,6 +102,14 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def draw_text(
+        self, access_token: str, *, input_path: Path, options: TextOptions
+    ) -> DeterministicEditResult:
+        payload, source = prepare_single_edit(input_path, options.program())
+        return self._single_image_operation(
+            access_token, payload, source, (source["width"], source["height"])
+        )
 
     def draw_shape(
         self, access_token: str, *, input_path: Path, options: ShapeOptions
