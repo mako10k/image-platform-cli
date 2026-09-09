@@ -27,7 +27,6 @@ These tests establish local CPU/client behavior, not public-edge behavior.
 
 ## Fixture hashes
 
-- `tests/fixtures/filter/cli-filter-audit.json`: `c27d83937f9d91d9db7502355be47fd07f7364775be3a03e24589a59e1f95153`
 - `tests/fixtures/filter/cli-filter-box_blur-1.5-1.json`: `b8811829671cad36844c63212b29940f271d5bd86d4619a8ec3e28640dabd550`
 - `tests/fixtures/filter/cli-filter-gaussian_blur-1.5-1.json`: `d6c67f8dd6db6e1c783f86ed9d84159c10588d64817e88053d800cdd78eb8f38`
 - `tests/fixtures/filter/cli-filter-unsharp_mask-0.5-0.json`: `385892f25c38482037b560154ae8214e9548d69b786e5ab86e4cf86139d75a12`
