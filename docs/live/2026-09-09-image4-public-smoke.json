@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-09-09T12:53:44.962015+00:00",
+  "calls": [
+    {
+      "method": "GET",
+      "path": "/v4/capabilities",
+      "status": 200,
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8",
+      "request_id": "req_28132f6fc48d498da809f9222bada489",
+      "cf_ray": "a38656755a51b26d-LAX"
+    },
+    {
+      "method": "POST",
+      "path": "/v4/image-operations",
+      "status": 200,
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8",
+      "request_id": "req_21db74f004d0446988db98347efa5b2f",
+      "cf_ray": "a38656b26f6a4e48-SJC",
+      "actual_cost_usd": "0",
+      "estimated_cost_usd": "0"
+    }
+  ],
+  "capabilities_exit": 0,
+  "catalog_revision": "2026-09-07-v4-r7",
+  "capability_count": 25,
+  "crop_exit": 0,
+  "output_dimensions": [
+    4,
+    2
+  ],
+  "pixels_equal_expected_crop": true,
+  "output_sha256": "37fa2c40879dfc9ab77f1ed5bed65e7b7492308b8a51ef7026795d6cff0f97c6"
+}
