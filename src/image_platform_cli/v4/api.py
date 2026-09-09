@@ -34,6 +34,7 @@ from ..common.models import (
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
 from .conversion import prepare_conversion
 from .crop import crop_program
+from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
 from .matting import prepare_matting, verify_matting
@@ -99,35 +100,40 @@ class V4ApiClient:
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
 
+    def grayscale_image(self, access_token: str, *, input_path: Path) -> DeterministicEditResult:
+        payload, source = prepare_single_edit(input_path, grayscale_program())
+        return self._single_image_operation(
+            access_token, payload, source, (source["width"], source["height"])
+        )
+
     def crop_image(
         self, access_token: str, *, input_path: Path, rect: tuple[int, int, int, int]
     ) -> DeterministicEditResult:
-        program = crop_program(rect)
-        payload, source = prepare_single_edit(input_path, program)
-        response, envelope = self._exchange(
-            "POST", "/v4/image-operations", access_token, json=payload
-        )
-        if not response.is_success:
-            raise ApiError(_safe_error(envelope))
-        return verify_single_edit(
-            response, self._object(envelope["data"]), program, source, (rect[2], rect[3])
-        )
+        payload, source = prepare_single_edit(input_path, crop_program(rect))
+        return self._single_image_operation(access_token, payload, source, (rect[2], rect[3]))
 
     def convert_image(
         self, access_token: str, *, input_path: Path, format_name: str, quality: int = 90
     ) -> DeterministicEditResult:
         payload, source = prepare_conversion(input_path, format_name, quality)
+        return self._single_image_operation(
+            access_token, payload, source, (source["width"], source["height"])
+        )
+
+    def _single_image_operation(
+        self,
+        access_token: str,
+        payload: dict[str, Any],
+        source: dict[str, Any],
+        output_size: tuple[int, int],
+    ) -> DeterministicEditResult:
         response, envelope = self._exchange(
             "POST", "/v4/image-operations", access_token, json=payload
         )
         if not response.is_success:
             raise ApiError(_safe_error(envelope))
         return verify_single_edit(
-            response,
-            self._object(envelope["data"]),
-            payload["program"],
-            source,
-            (source["width"], source["height"]),
+            response, self._object(envelope["data"]), payload["program"], source, output_size
         )
 
     def portrait_matting(

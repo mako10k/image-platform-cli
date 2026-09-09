@@ -17,8 +17,7 @@ from ..common.oauth import DeviceFlowClient
 from ..common.service import AuthService
 from ..common.tokens import TokenValidator
 from .api import QueryScalar, V4ApiClient
-from .crop import crop_program
-from .edit_cli import add_edit_commands, run_edit
+from .edit_cli import add_edit_commands, raster_program, run_edit
 from .segment_cli import validate_segment_outputs
 
 DEFAULT_LOGIN_SCOPES = (
@@ -140,7 +139,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _show_help(args.topic)
     try:
         if args.group == "edit" and args.command == "raster":
-            program = crop_program(args.rect)
+            program = raster_program(args)
             if args.dry_run:
                 print(json.dumps(program, sort_keys=True))
                 return 0
