@@ -12,11 +12,11 @@ from PIL import Image
 from image_platform_cli.common.errors import ApiError
 from image_platform_cli.common.files import require_available_output
 from image_platform_cli.common.models import SegmentationResult
+from image_platform_cli.common.segmentation import save_segmentation_outputs
 from image_platform_cli.v1.api import (
     ImageApiClient,
     _resolve_seed,
     save_image,
-    save_segmentation_outputs,
 )
 
 

@@ -25,11 +25,12 @@ from ..common.inputs import (
     require_one_image_source,
     validate_caption_controls,
 )
-from ..common.models import GeneratedImage
+from ..common.models import GeneratedImage, SegmentationResult
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
 from .protocol import route_contract, verify_response
+from .segmentation import SegmentSelector, prepare_segment, verify_segment
 
 API_VERSION = "4"
 CONTRACT_REVISION = "2026-09-09-r8"
@@ -88,6 +89,19 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def segment(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        selector: SegmentSelector,
+    ) -> SegmentationResult:
+        payload, source, metadata = prepare_segment(input_path, selector)
+        response, envelope = self._exchange("POST", "/v4/segmentations", access_token, json=payload)
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        return verify_segment(response, self._object(envelope["data"]), source, metadata)
 
     def inpaint(
         self,

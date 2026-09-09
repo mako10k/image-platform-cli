@@ -22,7 +22,7 @@ def decode_output(output: dict[str, Any]) -> bytes:
 
 
 def verify_image_headers(
-    response: httpx.Response, receipt: dict[str, Any], digest: str, seed: int
+    response: httpx.Response, receipt: dict[str, Any], digest: str, seed: int | None
 ) -> Decimal:
     try:
         cost = Decimal(str(receipt["measured_compute_cost_usd"]))
@@ -33,10 +33,11 @@ def verify_image_headers(
         raise ApiError("image cost header disagrees with the receipt")
     expected = {
         "x-image-sha256": digest,
-        "x-image-seed": str(seed),
         "x-image-model": receipt["model_id"],
         "x-image-model-revision": receipt["model_revision"],
     }
+    if seed is not None:
+        expected["x-image-seed"] = str(seed)
     if any(response.headers[key] != value for key, value in expected.items()):
         raise ApiError("image headers disagree with the receipt")
     return cost
