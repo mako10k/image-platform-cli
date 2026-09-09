@@ -17,6 +17,7 @@ from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions
 from .segment_cli import add_segment_command, coordinates, run_segment
+from .shapes import ShapeOptions
 
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -36,7 +37,13 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     )
     filtering.add_argument("--radius", type=Decimal, required=True)
     filtering.add_argument("--amount", type=Decimal, default=Decimal(1))
-    for operation in (crop, grayscale, filtering):
+    shape = raster.add_parser("shape")
+    shape.add_argument("--kind", choices=("rectangle", "ellipse"), required=True)
+    shape.add_argument("--rect", type=coordinates(4), required=True)
+    shape.add_argument("--fill", type=coordinates(4))
+    shape.add_argument("--stroke", type=coordinates(4))
+    shape.add_argument("--stroke-width", type=int, default=1)
+    for operation in (crop, grayscale, filtering, shape):
         operation.add_argument("--input", type=Path, required=True)
         operation.add_argument("--output", "-o", type=Path)
         operation.add_argument("--dry-run", action="store_true")
@@ -76,7 +83,11 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
-        if args.raster_command == "filter":
+        if args.raster_command == "shape":
+            raster_result = api.draw_shape(
+                token, input_path=args.input, options=shape_options(args)
+            )
+        elif args.raster_command == "filter":
             raster_result = api.filter_image(
                 token, input_path=args.input, kind=args.kind, radius=args.radius, amount=args.amount
             )
@@ -158,8 +169,14 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
+    if args.raster_command == "shape":
+        return shape_options(args).program()
     if args.raster_command == "filter":
         return filter_program(args.kind, args.radius, args.amount)
     if args.raster_command == "grayscale":
         return grayscale_program()
     return crop_program(args.rect)
+
+
+def shape_options(args: argparse.Namespace) -> ShapeOptions:
+    return ShapeOptions(args.kind, args.rect, args.fill, args.stroke, args.stroke_width)
