@@ -1,4 +1,4 @@
-"""Request and evidence helpers for supported single-command V4 image operations."""
+"""Request and evidence helpers for supported single-step V4 image operations."""
 
 import base64
 import hashlib
@@ -67,7 +67,7 @@ def verify_single_edit(
     raw = decode_output(data)
     image, receipt = data["image"], data["receipt"]
     program_hash = canonical_hash(program)
-    requested_command = program["commands"][0]
+    requested_commands = program["commands"]
     expected = {
         "input_sha256s": source["input_sha256s"],
         "program_sha256": program_hash,
@@ -77,16 +77,17 @@ def verify_single_edit(
     }
     if any(receipt[key] != value for key, value in expected.items()):
         raise ApiError("image operation receipt disagrees with the input or output")
-    command = receipt["commands"]
-    if len(command) != 1 or any(
-        command[0][key] != value
-        for key, value in {
-            "id": requested_command["id"],
-            "op": requested_command["op"],
-            "normalized_command_sha256": canonical_hash(program["commands"][0]),
-        }.items()
-    ):
-        raise ApiError("image operation command receipt disagrees with the request")
+    commands = receipt["commands"]
+    if len(commands) != len(requested_commands):
+        raise ApiError("image operation command count disagrees with the request")
+    for actual, requested in zip(commands, requested_commands, strict=True):
+        expected_command = {
+            "id": requested["id"],
+            "op": requested["op"],
+            "normalized_command_sha256": canonical_hash(requested),
+        }
+        if any(actual[key] != value for key, value in expected_command.items()):
+            raise ApiError("image operation command receipt disagrees with the request")
     if (image["mime_type"], image["width"], image["height"]) != (
         f"image/{program['encoding']['format']}",
         *output_size,
@@ -94,7 +95,11 @@ def verify_single_edit(
         raise ApiError("image operation output format or geometry disagrees with the request")
     verify_single_edit_headers(response, image, receipt)
     verify_single_edit_planner(
-        response, data["planner_receipt"], program_hash, source, requested_command["id"]
+        response,
+        data["planner_receipt"],
+        program_hash,
+        source,
+        [command["id"] for command in requested_commands],
     )
     return DeterministicEditResult(
         raw,
@@ -104,13 +109,14 @@ def verify_single_edit(
         image["height"],
         program_hash,
         cost,
-        (
+        tuple(
             (
-                requested_command["id"],
-                requested_command["op"],
-                command[0]["normalized_command_sha256"],
-                command[0]["output_pixel_sha256"],
-            ),
+                command["id"],
+                command["op"],
+                command["normalized_command_sha256"],
+                command["output_pixel_sha256"],
+            )
+            for command in commands
         ),
     )
 
@@ -134,7 +140,7 @@ def verify_single_edit_planner(
     planner: dict[str, Any] | None,
     program_hash: str,
     source: dict[str, Any],
-    command_id: str,
+    command_ids: list[str],
 ) -> None:
     if planner is None:
         if any(
@@ -148,7 +154,7 @@ def verify_single_edit_planner(
         "program_sha256": program_hash,
         "width": source["width"],
         "height": source["height"],
-        "command_ids": [command_id],
+        "command_ids": command_ids,
     }
     if (
         planner["logical_program_sha256"] != program_hash

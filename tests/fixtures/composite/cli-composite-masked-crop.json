@@ -1,0 +1,169 @@
+{
+  "request": {
+    "program": {
+      "revision": "deterministic-edit-v1",
+      "inputs": {
+        "source": "image",
+        "overlay": "image",
+        "mask": "mask"
+      },
+      "source_input": "source",
+      "semantics": {
+        "coordinate_system": "top_left_pixel_edges_integer_v1",
+        "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+        "alpha_representation": "straight",
+        "edge_color_policy": "preserve_unassociated_rgb_v1",
+        "white_point_adaptation": "bradford_v1",
+        "hue_wrap": "signed_degrees_modulo_360_v1",
+        "rounding": "round_half_even_u8_v1",
+        "gamut_mode": "clip"
+      },
+      "commands": [
+        {
+          "id": "place-overlay",
+          "op": "paste_image",
+          "input": "overlay",
+          "transform": {
+            "a": "1",
+            "b": "0",
+            "c": "0",
+            "d": "1",
+            "e": "1.5",
+            "f": "2"
+          },
+          "interpolation": "bicubic",
+          "border": "transparent",
+          "opacity": "0.5",
+          "composite": "source_over",
+          "coverage": {
+            "base": {
+              "source": {
+                "kind": "mask_input",
+                "input": "mask"
+              },
+              "transforms": []
+            },
+            "combine": []
+          }
+        },
+        {
+          "id": "crop-result",
+          "op": "crop",
+          "rect": {
+            "x": 1,
+            "y": 1,
+            "width": 5,
+            "height": 4
+          }
+        }
+      ],
+      "encoding": {
+        "format": "png",
+        "quality": 90,
+        "png_compress_level": 9,
+        "jpeg_subsampling": "4:4:4",
+        "progressive": false,
+        "webp_method": 6,
+        "strip_metadata": true,
+        "output_profile": "srgb",
+        "alpha_policy": "preserve_or_flatten_white_v1"
+      }
+    },
+    "inputs": {
+      "source": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIUlEQVR4nGO8Iyfy34LLppEBB2DCJ8nAwMDAhE9yyCgAAASpBBsxbRxCAAAAAElFTkSuQmCC"
+      },
+      "overlay": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAIElEQVR4nGM8ITJtzpY5DAwMDAwMjCknjBhggIkBCQAAmIgEwfc/tOsAAAAASUVORK5CYII="
+      },
+      "mask": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAEElEQVR4nGNsYIAAJgaKGAAmCACQXTClHgAAAABJRU5ErkJggg=="
+      }
+    }
+  },
+  "body": {
+    "data": {
+      "image": {
+        "mime_type": "image/png",
+        "sha256": "8ba185fbd81de95d8fb5c5cdee3f056d10d0b05dedaf8bf839ea33795a42912d",
+        "size_bytes": 113,
+        "width": 5,
+        "height": 4
+      },
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAECAYAAABGM/VAAAAAOElEQVR42mMU0QhoYEADLL4fFBWe6zxneK77nIH1OyvDgwM8D1guB1xmYGBgYGD9zgpXycSABQAAnTQND9x9OBAAAAAASUVORK5CYII=",
+      "receipt": {
+        "contract_revision": "deterministic-edit-v1",
+        "limits_revision": "deterministic-edit-limits-v1",
+        "implementation_revision": "cpu-raster-color-edit-v2",
+        "program_sha256": "23b02e5ed86dee8d61323589806156b44b1ca64875878708784f52345b07c7e1",
+        "input_sha256s": {
+          "source": "7e41b05dc54354bbf53ec43b5eea2aaeb0bd6129fc532a30b87ea7bea72f9ec4",
+          "overlay": "6a2ac4f25208918b8bb3f2ce713f16ec0fce3f4883c434e72535beb2ec66ff04",
+          "mask": "e65769a0f9516417d8050d9c5d7637ef98b05c098264a854397b6485fe8d6898"
+        },
+        "commands": [
+          {
+            "id": "place-overlay",
+            "op": "paste_image",
+            "normalized_command_sha256": "8c55e36c71f85cd23cb7cb9021ab6f58aabd8f74243f911149a473076b063ef6",
+            "output_pixel_sha256": "791cc4c31c7baa50cb41f6f37f59608c97ee24c43023036371a8c2eaad855f26"
+          },
+          {
+            "id": "crop-result",
+            "op": "crop",
+            "normalized_command_sha256": "16d3b0f8fb06da9ce508215c510165b82b33aa4e9d8313081c761d282aa4b186",
+            "output_pixel_sha256": "c5532802e4651cb653d78a73fab805ce1ad7b62079e0e51ead48a8dfcedd5221"
+          }
+        ],
+        "output_sha256": "8ba185fbd81de95d8fb5c5cdee3f056d10d0b05dedaf8bf839ea33795a42912d",
+        "output_width": 5,
+        "output_height": 4
+      },
+      "planner_receipt": {
+        "contract_revision": "bounded-edit-planner-v1",
+        "implementation_revision": "split-and-fuse-in-order-v2",
+        "logical_program_sha256": "23b02e5ed86dee8d61323589806156b44b1ca64875878708784f52345b07c7e1",
+        "physical_graph_sha256": "5db185729b845855eb65455d3d9b5dfecf308f95db2d0bb3476585937ad4e0e6",
+        "max_color_sample_work": 4194304,
+        "applied_rule_ids": [],
+        "nodes": [
+          {
+            "step_id": "image_ops_1",
+            "width": 8,
+            "height": 8,
+            "color_sample_work": 0,
+            "command_ids": [
+              "place-overlay",
+              "crop-result"
+            ],
+            "fused_command_groups": [],
+            "program_sha256": "23b02e5ed86dee8d61323589806156b44b1ca64875878708784f52345b07c7e1"
+          }
+        ]
+      },
+      "estimated_cost_usd": "0",
+      "actual_cost_usd": "0"
+    },
+    "meta": {
+      "request_id": "req_625f12cc7a944f558cb193dd544e3c28",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "8ba185fbd81de95d8fb5c5cdee3f056d10d0b05dedaf8bf839ea33795a42912d",
+    "x-image-width": "5",
+    "x-image-height": "4",
+    "x-image-program-sha256": "23b02e5ed86dee8d61323589806156b44b1ca64875878708784f52345b07c7e1",
+    "x-image-implementation-revision": "cpu-raster-color-edit-v2",
+    "x-image-logical-program-sha256": "23b02e5ed86dee8d61323589806156b44b1ca64875878708784f52345b07c7e1",
+    "x-image-physical-graph-sha256": "5db185729b845855eb65455d3d9b5dfecf308f95db2d0bb3476585937ad4e0e6",
+    "content-length": "2143",
+    "content-type": "application/json",
+    "x-request-id": "req_625f12cc7a944f558cb193dd544e3c28",
+    "cache-control": "no-store"
+  }
+}
