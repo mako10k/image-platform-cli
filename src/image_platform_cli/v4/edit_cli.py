@@ -10,6 +10,7 @@ from typing import Any
 
 from ..common.errors import CliError
 from ..common.files import read_image, save_bytes_exclusive
+from ..common.geometry import _geometry_command
 from ..common.service import AuthService
 from .api import V4ApiClient
 from .color_matching import ColorMatchOptions
@@ -21,6 +22,7 @@ from .image_edits import ImageToImageOptions
 from .project_quad import QuadOptions
 from .segment_cli import add_segment_command, coordinates, run_segment
 from .shapes import ShapeOptions
+from .single_edits import single_edit_program
 from .text_drawing import TextOptions
 
 
@@ -86,7 +88,33 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
         choices=("source_over", "replace", "multiply", "screen"),
         default="source_over",
     )
-    for operation in (crop, grayscale, filtering, shape, text, color_match, quad):
+    resize = raster.add_parser("resize")
+    resize.add_argument("--width", type=int, required=True)
+    resize.add_argument("--height", type=int, required=True)
+    resize.add_argument("--fit", action="store_true")
+    flip = raster.add_parser("flip")
+    flip.add_argument("--axis", choices=("horizontal", "vertical"), required=True)
+    rotate = raster.add_parser("rotate")
+    rotate.add_argument("--degrees", type=int, choices=(90, 180, 270), required=True)
+    canvas = raster.add_parser("canvas")
+    canvas.add_argument("--width", type=int, required=True)
+    canvas.add_argument("--height", type=int, required=True)
+    canvas.add_argument("--x", type=int, default=0)
+    canvas.add_argument("--y", type=int, default=0)
+    canvas.add_argument("--background", type=coordinates(4), default=(0, 0, 0, 0))
+    for operation in (
+        crop,
+        grayscale,
+        filtering,
+        shape,
+        text,
+        color_match,
+        quad,
+        resize,
+        flip,
+        rotate,
+        canvas,
+    ):
         operation.add_argument("--input", type=Path, required=True)
         operation.add_argument("--output", "-o", type=Path)
         operation.add_argument("--dry-run", action="store_true")
@@ -137,7 +165,10 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
         return
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
-        if args.raster_command == "project-quad":
+        if args.raster_command in {"resize", "flip", "rotate", "canvas"}:
+            program = raster_program(args)
+            raster_result = api.geometry_image(token, input_path=args.input, program=program)
+        elif args.raster_command == "project-quad":
             raster_result = api.project_quad(
                 token,
                 input_path=args.input,
@@ -239,6 +270,15 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
+    if args.raster_command in {"resize", "flip", "rotate", "canvas"}:
+        if args.raster_command == "canvas":
+            from .shapes import rgba
+
+            args = argparse.Namespace(**vars(args))
+            args.background = rgba(args.background)
+        program = single_edit_program()
+        program["commands"] = [_geometry_command(args)]
+        return program
     if args.raster_command == "project-quad":
         return QuadOptions(args.destination, args.composite).program()
     if args.raster_command == "color-match":

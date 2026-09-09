@@ -106,6 +106,15 @@ class V4ApiClient:
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
 
+    def geometry_image(
+        self, access_token: str, *, input_path: Path, program: dict[str, Any]
+    ) -> DeterministicEditResult:
+        payload, source = prepare_single_edit(input_path, program)
+        command = program["commands"][0]
+        return self._single_image_operation(
+            access_token, payload, source, (command["output_width"], command["output_height"])
+        )
+
     def composite_image(
         self,
         access_token: str,

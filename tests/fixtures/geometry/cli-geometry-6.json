@@ -1,0 +1,140 @@
+{
+  "args": [
+    "rotate",
+    "--degrees",
+    "270"
+  ],
+  "request": {
+    "program": {
+      "revision": "deterministic-edit-v1",
+      "inputs": {
+        "source": "image"
+      },
+      "source_input": "source",
+      "semantics": {
+        "coordinate_system": "top_left_pixel_edges_integer_v1",
+        "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+        "alpha_representation": "straight",
+        "edge_color_policy": "preserve_unassociated_rgb_v1",
+        "white_point_adaptation": "bradford_v1",
+        "hue_wrap": "signed_degrees_modulo_360_v1",
+        "rounding": "round_half_even_u8_v1",
+        "gamut_mode": "clip"
+      },
+      "commands": [
+        {
+          "id": "rotate",
+          "op": "affine",
+          "transform": {
+            "a": "0",
+            "b": "-1",
+            "c": "1",
+            "d": "0",
+            "e": "0",
+            "f": "8"
+          },
+          "output_width": 8,
+          "output_height": 8,
+          "interpolation": "bicubic",
+          "border": "constant",
+          "background": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 0
+          }
+        }
+      ],
+      "encoding": {
+        "format": "png",
+        "quality": 90,
+        "png_compress_level": 9,
+        "jpeg_subsampling": "4:4:4",
+        "progressive": false,
+        "webp_method": 6,
+        "strip_metadata": true,
+        "output_profile": "srgb",
+        "alpha_policy": "preserve_or_flatten_white_v1"
+      }
+    },
+    "inputs": {
+      "source": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIUlEQVR4nGO8Iyfy34LLppEBB2DCJ8nAwMDAhE9yyCgAAASpBBsxbRxCAAAAAElFTkSuQmCC"
+      }
+    }
+  },
+  "body": {
+    "data": {
+      "image": {
+        "mime_type": "image/png",
+        "sha256": "a40ad02fe3a6c84d29749dcca431e63b45873f4fde280557504cab6a81a22b62",
+        "size_bytes": 86,
+        "width": 8,
+        "height": 8
+      },
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAHUlEQVR42mMUVvdvYMADmBgIgKGh4OT3o/X4FAAAc9MEHVn4PagAAAAASUVORK5CYII=",
+      "receipt": {
+        "contract_revision": "deterministic-edit-v1",
+        "limits_revision": "deterministic-edit-limits-v1",
+        "implementation_revision": "cpu-raster-color-edit-v2",
+        "program_sha256": "37cde957d6e92c4c03cdce4683726c5c21c3dcd7fcbf10aa88f6a8bb28a0aeba",
+        "input_sha256s": {
+          "source": "7e41b05dc54354bbf53ec43b5eea2aaeb0bd6129fc532a30b87ea7bea72f9ec4"
+        },
+        "commands": [
+          {
+            "id": "rotate",
+            "op": "affine",
+            "normalized_command_sha256": "32e8979812b2200b80bb224e26ad5bb0f604af5caaaf3e36f75752df93de3d11",
+            "output_pixel_sha256": "a541c5790231810528a1fc74fcf2de9b135d4466a449e748f71014d7761d48bf"
+          }
+        ],
+        "output_sha256": "a40ad02fe3a6c84d29749dcca431e63b45873f4fde280557504cab6a81a22b62",
+        "output_width": 8,
+        "output_height": 8
+      },
+      "planner_receipt": {
+        "contract_revision": "bounded-edit-planner-v1",
+        "implementation_revision": "split-and-fuse-in-order-v2",
+        "logical_program_sha256": "37cde957d6e92c4c03cdce4683726c5c21c3dcd7fcbf10aa88f6a8bb28a0aeba",
+        "physical_graph_sha256": "8741875e4c7bd5f96840a2ea25d01aad90a70b75b8b0514bf0179c92aa789dc7",
+        "max_color_sample_work": 4194304,
+        "applied_rule_ids": [],
+        "nodes": [
+          {
+            "step_id": "image_ops_1",
+            "width": 8,
+            "height": 8,
+            "color_sample_work": 0,
+            "command_ids": [
+              "rotate"
+            ],
+            "fused_command_groups": [],
+            "program_sha256": "37cde957d6e92c4c03cdce4683726c5c21c3dcd7fcbf10aa88f6a8bb28a0aeba"
+          }
+        ]
+      },
+      "estimated_cost_usd": "0",
+      "actual_cost_usd": "0"
+    },
+    "meta": {
+      "request_id": "req_a6305e487f39400bb4236075e021310a",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "a40ad02fe3a6c84d29749dcca431e63b45873f4fde280557504cab6a81a22b62",
+    "x-image-width": "8",
+    "x-image-height": "8",
+    "x-image-program-sha256": "37cde957d6e92c4c03cdce4683726c5c21c3dcd7fcbf10aa88f6a8bb28a0aeba",
+    "x-image-implementation-revision": "cpu-raster-color-edit-v2",
+    "x-image-logical-program-sha256": "37cde957d6e92c4c03cdce4683726c5c21c3dcd7fcbf10aa88f6a8bb28a0aeba",
+    "x-image-physical-graph-sha256": "8741875e4c7bd5f96840a2ea25d01aad90a70b75b8b0514bf0179c92aa789dc7",
+    "content-length": "1705",
+    "content-type": "application/json",
+    "x-request-id": "req_a6305e487f39400bb4236075e021310a",
+    "cache-control": "no-store"
+  }
+}
