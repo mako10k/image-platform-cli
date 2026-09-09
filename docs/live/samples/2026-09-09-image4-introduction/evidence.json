@@ -1,0 +1,20 @@
+{
+  "cli_commit": "8cb0544",
+  "api_deployment_commit": "5d053dd",
+  "profile": "generation-standard",
+  "seed": 20260909,
+  "dimensions": [
+    1024,
+    1024
+  ],
+  "job_id": "job_c6fb870bb291434a8bc798f710a0f79c",
+  "reported_cost": {
+    "estimated_usd": "0.040000",
+    "actual_usd": "0.010960"
+  },
+  "artifact_id": "art_d8b0126c98ee4fc3aa2858dd1fade843",
+  "sha256": "4ecb61ec180cc04d40dd0fd4be8e2e2cbb54816efd2f821ed26fd20953cfe931",
+  "cli_exit": 0,
+  "generation_submissions": 1,
+  "observation": "Female presenter and four feature cards rendered. Generated typography reads imge4 and VERITY instead of image4 and VERIFY; output is unretouched."
+}
