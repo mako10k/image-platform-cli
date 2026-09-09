@@ -17,6 +17,7 @@ from ..common.oauth import DeviceFlowClient
 from ..common.service import AuthService
 from ..common.tokens import TokenValidator
 from .api import QueryScalar, V4ApiClient
+from .crop import crop_program
 from .edit_cli import add_edit_commands, run_edit
 from .segment_cli import validate_segment_outputs
 
@@ -138,6 +139,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.group == "help":
         return _show_help(args.topic)
     try:
+        if args.group == "edit" and args.command == "raster":
+            program = crop_program(args.rect)
+            if args.dry_run:
+                print(json.dumps(program, sort_keys=True))
+                return 0
+            if args.output is None:
+                raise CliError("--output is required unless --dry-run is used")
         if args.group == "edit" and args.command == "segment":
             validate_segment_outputs(args)
         elif args.group in {"generate", "edit"}:

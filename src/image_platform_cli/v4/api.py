@@ -32,12 +32,14 @@ from ..common.models import (
     SegmentationResult,
 )
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
-from .conversion import prepare_conversion, verify_conversion
+from .conversion import prepare_conversion
+from .crop import crop_program
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
 from .matting import prepare_matting, verify_matting
 from .protocol import route_contract, verify_response
 from .segmentation import SegmentSelector, prepare_segment, verify_segment
+from .single_edits import prepare_single_edit, verify_single_edit
 
 API_VERSION = "4"
 CONTRACT_REVISION = "2026-09-09-r8"
@@ -97,6 +99,20 @@ class V4ApiClient:
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
 
+    def crop_image(
+        self, access_token: str, *, input_path: Path, rect: tuple[int, int, int, int]
+    ) -> DeterministicEditResult:
+        program = crop_program(rect)
+        payload, source = prepare_single_edit(input_path, program)
+        response, envelope = self._exchange(
+            "POST", "/v4/image-operations", access_token, json=payload
+        )
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        return verify_single_edit(
+            response, self._object(envelope["data"]), program, source, (rect[2], rect[3])
+        )
+
     def convert_image(
         self, access_token: str, *, input_path: Path, format_name: str, quality: int = 90
     ) -> DeterministicEditResult:
@@ -106,8 +122,12 @@ class V4ApiClient:
         )
         if not response.is_success:
             raise ApiError(_safe_error(envelope))
-        return verify_conversion(
-            response, self._object(envelope["data"]), payload["program"], source
+        return verify_single_edit(
+            response,
+            self._object(envelope["data"]),
+            payload["program"],
+            source,
+            (source["width"], source["height"]),
         )
 
     def portrait_matting(
