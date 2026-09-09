@@ -1,0 +1,45 @@
+import base64
+import hashlib
+import json
+from fastapi.testclient import TestClient
+from pydantic import TypeAdapter, ValidationError
+from image_platform.api import create_app
+from image_platform.editing import EditImageMetadata, ImageEditService
+from image_platform.native_v4 import NativeImageOutput
+from image_platform.native_v4 import V4ImageEditResult
+from tests.auth_helpers import TestAuthenticator
+from tests.unit.test_editing import FakeImageEditProvider, FakeImageToImageProvider, png_bytes
+
+class ValidImageProvider(FakeImageToImageProvider):
+    calls = 0
+    result = None
+    def image_to_image(self, request):
+        self.calls += 1
+        raw = super().image_to_image(request)
+        data = png_bytes(color='green')
+        receipt = raw.receipt.model_copy(update={'output_image': EditImageMetadata(
+            sha256=hashlib.sha256(data).hexdigest(), width=512, height=512)})
+        self.result = raw.model_copy(update={'image_bytes': data, 'receipt': receipt})
+        return self.result
+
+provider = ValidImageProvider()
+app = create_app(image_edit_service=ImageEditService(
+    FakeImageEditProvider(), image_to_image_provider=provider,
+    allowed_principals=frozenset({'local-test'})),
+    authenticator=TestAuthenticator({'local-test':'test-token'}))
+payload = {'prompt':'watercolor', 'seed':123, 'input':{
+    'mime_type':'image/png', 'data_base64':base64.b64encode(png_bytes()).decode()}}
+with TestClient(app) as client:
+    v4 = client.post('/v4/image-edits', json=payload, headers={'Authorization':'Bearer test-token'})
+    print(json.dumps({'surface':'local ASGI only','v4_status':v4.status_code,
+        'v4_error':v4.json().get('error'),'provider_calls_after_v4':provider.calls}))
+    try:
+        TypeAdapter(V4ImageEditResult).validate_python({
+            'output':NativeImageOutput.from_bytes(provider.result.image_bytes),
+            'receipt':provider.result.receipt})
+    except ValidationError as error:
+        print(json.dumps({'serialization_errors':[{'location':e['loc'],'type':e['type']} for e in error.errors(include_input=False)]}))
+    v1 = client.post('/v1/image-to-image', json=payload, headers={'Authorization':'Bearer test-token'})
+    print(json.dumps({'v1_status':v1.status_code,'provider_calls_total':provider.calls,
+        'producer_receipt':type(provider.result.receipt).__name__,
+        'declared_v4_receipt':V4ImageEditResult.model_fields['receipt'].annotation.__name__}))
