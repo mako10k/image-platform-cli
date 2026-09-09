@@ -16,6 +16,15 @@ from .image_edits import ImageToImageOptions
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
+    inpaint = commands.add_parser("inpaint")
+    for name in ("input", "mask", "output"):
+        inpaint.add_argument(f"--{name}", type=Path, required=True)
+    inpaint.add_argument("prompt")
+    inpaint.add_argument("--seed", type=int)
+    inpaint.add_argument("--profile", default="inpaint-stable-diffusion-v1-5")
+    inpaint.add_argument(
+        "--safety-filter", choices=("default", "enabled", "disabled"), default="default"
+    )
     command = commands.add_parser("image-to-image", aliases=["i2i"])
     command.add_argument("prompt")
     source = command.add_mutually_exclusive_group(required=True)
@@ -35,6 +44,19 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
+    if args.command == "inpaint":
+        result = api.inpaint(
+            service.access_token(frozenset({"images:edit"})),
+            input_path=args.input,
+            mask_path=args.mask,
+            prompt=args.prompt,
+            seed=args.seed if args.seed is not None else secrets.randbits(63),
+            profile=args.profile,
+            safety_filter=args.safety_filter,
+        )
+        save_bytes_exclusive(result.data, args.output)
+        print(f"Saved {result.width}x{result.height} image to {args.output}.")
+        return
     if args.capture_input and args.input is None:
         raise CliError("--capture-input requires a local input image")
     options = ImageToImageOptions(
