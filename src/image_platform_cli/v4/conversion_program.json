@@ -1,0 +1,34 @@
+{
+  "revision": "deterministic-edit-v1",
+  "inputs": {
+    "source": "image"
+  },
+  "source_input": "source",
+  "semantics": {
+    "coordinate_system": "top_left_pixel_edges_integer_v1",
+    "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+    "alpha_representation": "straight",
+    "edge_color_policy": "preserve_unassociated_rgb_v1",
+    "white_point_adaptation": "bradford_v1",
+    "hue_wrap": "signed_degrees_modulo_360_v1",
+    "rounding": "round_half_even_u8_v1",
+    "gamut_mode": "clip"
+  },
+  "commands": [
+    {
+      "id": "convert",
+      "op": "convert"
+    }
+  ],
+  "encoding": {
+    "format": "png",
+    "quality": 90,
+    "png_compress_level": 9,
+    "jpeg_subsampling": "4:4:4",
+    "progressive": false,
+    "webp_method": 6,
+    "strip_metadata": true,
+    "output_profile": "srgb",
+    "alpha_policy": "preserve_or_flatten_white_v1"
+  }
+}
