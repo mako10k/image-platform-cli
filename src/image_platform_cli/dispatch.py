@@ -1,0 +1,8 @@
+from collections.abc import Sequence
+
+from .v1.cli import main as _image1_main
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Delegate the stable command to the implementation fixed by this package."""
+    return _image1_main(argv)

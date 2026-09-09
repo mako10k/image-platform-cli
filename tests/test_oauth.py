@@ -3,8 +3,8 @@ from collections.abc import Iterator
 import httpx
 import pytest
 
-from image_platform_cli.errors import AuthenticationError
-from image_platform_cli.oauth import DeviceFlowClient
+from image_platform_cli.common.errors import AuthenticationError
+from image_platform_cli.common.oauth import DeviceFlowClient
 
 
 class Clock:

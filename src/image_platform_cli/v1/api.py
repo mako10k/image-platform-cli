@@ -2,7 +2,6 @@ import base64
 import binascii
 import hashlib
 import json
-import os
 import re
 import secrets
 import time
@@ -17,8 +16,14 @@ from uuid import uuid4
 import httpx
 from PIL import Image, UnidentifiedImageError
 
-from .errors import ApiError
-from .models import (
+from ..common import files
+from ..common.errors import ApiError
+from ..common.inputs import (
+    generation_execution,
+    require_one_image_source,
+    validate_caption_controls,
+)
+from ..common.models import (
     DeterministicEditResult,
     GeneratedImage,
     PortraitMattingResult,
@@ -30,7 +35,6 @@ TERMINAL_CAMPAIGN_STATUSES = frozenset({"completed", "partial", "failed", "cance
 MAX_PAGE_SIZE = 100
 MAX_ARTIFACT_DOWNLOAD_BYTES = 100 * 1024 * 1024
 MAX_EDIT_IMAGE_BYTES = 10 * 1024 * 1024
-MAX_EDIT_PIXELS = 4_194_304
 MAX_STABILITY_SEED = 4_294_967_294
 INPAINT_PROFILE = "inpaint-stable-diffusion-v1-5"
 INPAINT_MODEL = "stable-diffusion-v1-5/stable-diffusion-inpainting"
@@ -170,7 +174,7 @@ class ImageApiClient:
             "seed": effective_seed,
         }
         if input_path is not None:
-            source, mime_type, _, _ = _read_edit_input(input_path)
+            source, mime_type, _, _ = files.read_image(input_path)
             payload["input"] = {
                 "mime_type": mime_type,
                 "data_base64": base64.b64encode(source).decode("ascii"),
@@ -230,18 +234,14 @@ class ImageApiClient:
         instruction: str = "Describe this image concisely.",
         max_output_tokens: int = 128,
     ) -> dict[str, Any]:
-        if (input_path is None) == (artifact_id is None):
-            raise ApiError("exactly one caption input or Artifact is required")
-        if not instruction.strip() or len(instruction) > 2048:
-            raise ApiError("caption instruction must contain 1 to 2048 characters")
-        if not 1 <= max_output_tokens <= 512:
-            raise ApiError("max output tokens must be from 1 through 512")
+        require_one_image_source(input_path, artifact_id, operation="caption")
+        validate_caption_controls(instruction, max_output_tokens)
         payload: dict[str, object] = {
             "instruction": instruction,
             "max_output_tokens": max_output_tokens,
         }
         if input_path is not None:
-            source, mime_type, _, _ = _read_edit_input(input_path)
+            source, mime_type, _, _ = files.read_image(input_path)
             payload["input"] = {
                 "mime_type": mime_type,
                 "data_base64": base64.b64encode(source).decode("ascii"),
@@ -261,7 +261,7 @@ class ImageApiClient:
         points: Sequence[tuple[int, int, bool]],
         box: tuple[int, int, int, int] | None,
     ) -> SegmentationResult:
-        source, mime_type, source_width, source_height = _read_edit_input(input_path)
+        source, mime_type, source_width, source_height = files.read_image(input_path)
         _validate_segment_selector(text, points, box, source_width, source_height)
         payload: dict[str, object] = {
             "input": {
@@ -316,8 +316,8 @@ class ImageApiClient:
         person_mask_path: Path,
         uncertainty_radius: int,
     ) -> PortraitMattingResult:
-        source, source_mime, source_width, source_height = _read_edit_input(input_path)
-        mask, mask_mime, mask_width, mask_height = _read_edit_input(person_mask_path)
+        source, source_mime, source_width, source_height = files.read_image(input_path)
+        mask, mask_mime, mask_width, mask_height = files.read_image(person_mask_path)
         if (mask_width, mask_height) != (source_width, source_height):
             raise ApiError("person mask dimensions must match image dimensions")
         if not 0 <= uncertainty_radius <= 64:
@@ -375,9 +375,9 @@ class ImageApiClient:
         composite: str,
         crop: tuple[int, int, int, int] | None,
     ) -> DeterministicEditResult:
-        background, background_mime, _, _ = _read_edit_input(background_path)
-        overlay, overlay_mime, _, _ = _read_edit_input(overlay_path)
-        mask_input = _read_edit_input(mask_path) if mask_path is not None else None
+        background, background_mime, _, _ = files.read_image(background_path)
+        overlay, overlay_mime, _, _ = files.read_image(overlay_path)
+        mask_input = files.read_image(mask_path) if mask_path is not None else None
         _validate_composite_controls(transform, opacity, crop)
         if composite not in {"source_over", "replace", "multiply", "screen"}:
             raise ApiError("unsupported composite mode")
@@ -441,7 +441,7 @@ class ImageApiClient:
         except (ValueError, binascii.Error) as error:
             raise ApiError("image API returned invalid composite Base64") from error
         mime_type = _required_string(metadata, "mime_type")
-        _verify_artifact(data, mime_type, metadata)
+        files.verify_artifact(data, mime_type, metadata)
         digest = hashlib.sha256(data).hexdigest()
         width = _required_int(metadata, "width")
         height = _required_int(metadata, "height")
@@ -501,7 +501,7 @@ class ImageApiClient:
         inline_inputs: dict[str, object] = {}
         input_hashes: dict[str, str] = {}
         for name, path in sorted({**input_paths, **mask_paths}.items()):
-            data, mime, _, _ = _read_edit_input(path)
+            data, mime, _, _ = files.read_image(path)
             inline_inputs[name] = _inline_image(data, mime)
             input_hashes[name] = hashlib.sha256(data).hexdigest()
         body = self._request_json(
@@ -516,7 +516,7 @@ class ImageApiClient:
         except (ValueError, binascii.Error) as error:
             raise ApiError("image API returned invalid deterministic-edit Base64") from error
         mime_type = _required_string(metadata, "mime_type")
-        _verify_artifact(data, mime_type, metadata)
+        files.verify_artifact(data, mime_type, metadata)
         digest = hashlib.sha256(data).hexdigest()
         width = _required_int(metadata, "width")
         height = _required_int(metadata, "height")
@@ -569,8 +569,8 @@ class ImageApiClient:
         seed: int | None,
         safety_filter: str = "default",
     ) -> GeneratedImage:
-        image, image_mime, width, height = _read_edit_input(input_path)
-        mask, mask_mime, mask_width, mask_height = _read_edit_input(mask_path)
+        image, image_mime, width, height = files.read_image(input_path)
+        mask, mask_mime, mask_width, mask_height = files.read_image(mask_path)
         if profile != INPAINT_PROFILE:
             raise ApiError("unknown inpaint profile")
         if safety_filter not in {"default", "enabled", "disabled"}:
@@ -735,7 +735,7 @@ class ImageApiClient:
         namespace: str = "default",
         kind: str = "image",
     ) -> dict[str, Any]:
-        data, mime_type, width, height = _read_edit_input(input_path)
+        data, mime_type, width, height = files.read_image(input_path)
         reserved = self._request_json(
             "POST",
             "/v1/uploads",
@@ -780,13 +780,13 @@ class ImageApiClient:
             raise ApiError("image API returned an inconsistent Artifact ID")
         result = _required_dict(completed.get("result"))
         metadata = _required_dict(result.get("artifact"))
-        _verify_artifact(data, mime_type, metadata)
+        files.verify_artifact(data, mime_type, metadata)
         return cast(dict[str, Any], _safe_projection(completed))
 
     def download_artifact(
         self, access_token: str, artifact_id: str, output: Path
     ) -> dict[str, Any]:
-        require_available_output(output)
+        files.require_available_output(output)
         body = self._request_json("GET", f"/v1/artifacts/{_resource_id(artifact_id)}", access_token)
         result = _required_dict(body.get("result"))
         metadata = _required_dict(result.get("artifact"))
@@ -803,8 +803,8 @@ class ImageApiClient:
         if not response.is_success:
             raise ApiError(_safe_api_error(response))
         data = response.content
-        _verify_artifact(data, response.headers.get("Content-Type"), metadata)
-        _save_bytes_exclusive(data, output)
+        files.verify_artifact(data, response.headers.get("Content-Type"), metadata)
+        files.save_bytes_exclusive(data, output)
         return cast(dict[str, Any], _safe_projection(body))
 
     def search(
@@ -836,7 +836,7 @@ class ImageApiClient:
         if query is not None:
             payload["query"] = query
         elif image_path is not None:
-            data, mime_type, _, _ = _read_edit_input(image_path)
+            data, mime_type, _, _ = files.read_image(image_path)
             payload["image"] = {
                 "mime_type": mime_type,
                 "data_base64": base64.b64encode(data).decode("ascii"),
@@ -1216,11 +1216,7 @@ class ImageApiClient:
                     "height": height,
                     "seed": effective_seed,
                     "optimizer_enabled": optimize,
-                    "execution": {
-                        "wait_seconds": wait_seconds,
-                        "allow_long_wait": allow_long_wait,
-                        "accept_async": True,
-                    },
+                    "execution": generation_execution(wait_seconds, allow_long_wait),
                 },
             )
             artifact, confirmed_seed = (
@@ -1352,55 +1348,7 @@ class ImageApiClient:
 
 
 def save_image(image: GeneratedImage, output: Path) -> None:
-    require_available_output(output)
-    try:
-        with output.open("xb") as stream:
-            stream.write(image.data)
-            stream.flush()
-            os.fsync(stream.fileno())
-    except FileExistsError as error:
-        raise ApiError("output file already exists") from error
-    except OSError as error:
-        try:
-            output.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise ApiError("output file could not be written") from error
-
-
-def require_available_output(output: Path) -> None:
-    """Reject known output conflicts before authentication or paid generation starts."""
-
-    if not output.parent.is_dir():
-        raise ApiError("output directory does not exist")
-    if output.exists():
-        raise ApiError("output file already exists")
-
-
-def _read_edit_input(path: Path) -> tuple[bytes, str, int, int]:
-    if not path.is_file():
-        raise ApiError("input image does not exist or is not a regular file")
-    try:
-        data = path.read_bytes()
-    except OSError as error:
-        raise ApiError("input image could not be read") from error
-    if not data or len(data) > MAX_EDIT_IMAGE_BYTES:
-        raise ApiError("input image must contain at most 10 MiB")
-    try:
-        with Image.open(BytesIO(data)) as image:
-            image_format = image.format
-            width, height = image.size
-            image.verify()
-    except (UnidentifiedImageError, OSError, ValueError) as error:
-        raise ApiError("input image is invalid") from error
-    mime_type = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(
-        image_format or ""
-    )
-    if mime_type is None:
-        raise ApiError("input image must be PNG, JPEG, or WebP")
-    if width <= 0 or height <= 0 or width * height > MAX_EDIT_PIXELS:
-        raise ApiError("input image exceeds the supported pixel limit")
-    return data, mime_type, width, height
+    files.save_bytes_exclusive(image.data, output)
 
 
 def _validate_segment_selector(
@@ -1447,8 +1395,8 @@ def _validate_composite_controls(
 
 
 def save_deterministic_edit(result: DeterministicEditResult, output: Path) -> None:
-    require_available_output(output)
-    _save_bytes_exclusive(result.data, output)
+    files.require_available_output(output)
+    files.save_bytes_exclusive(result.data, output)
 
 
 def _validate_image_to_image_controls(
@@ -1526,9 +1474,9 @@ def save_segmentation_outputs(
     if len(set(destinations)) != len(destinations):
         raise ApiError("segmentation output paths must be distinct")
     for output in destinations:
-        require_available_output(output)
+        files.require_available_output(output)
     if mask_output is not None:
-        _save_bytes_exclusive(result.mask_data, mask_output)
+        files.save_bytes_exclusive(result.mask_data, mask_output)
     if foreground_output is None and background_output is None:
         return
     try:
@@ -1548,67 +1496,7 @@ def save_segmentation_outputs(
         rendered.putalpha(alpha)
         buffer = BytesIO()
         rendered.save(buffer, format="PNG")
-        _save_bytes_exclusive(buffer.getvalue(), rendered_output)
-
-
-def _save_bytes_exclusive(data: bytes, output: Path) -> None:
-    temporary = output.with_name(f".{output.name}.{secrets.token_hex(8)}.part")
-    try:
-        with temporary.open("xb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        try:
-            os.link(temporary, output)
-        except FileExistsError as error:
-            raise ApiError("output file already exists") from error
-        except OSError as error:
-            raise ApiError("output file could not be written") from error
-    finally:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-
-
-def _verify_artifact(
-    data: bytes, response_content_type: str | None, metadata: dict[str, Any]
-) -> None:
-    expected_sha = _required_string(metadata, "sha256")
-    expected_size = _required_int(metadata, "size_bytes")
-    expected_mime = _required_string(metadata, "mime_type")
-    actual_content_type = (
-        response_content_type.split(";", 1)[0].strip() if response_content_type else None
-    )
-    if (
-        not data
-        or hashlib.sha256(data).hexdigest() != expected_sha
-        or len(data) != expected_size
-        or actual_content_type != expected_mime
-    ):
-        raise ApiError("Artifact download integrity check failed")
-    width = metadata.get("width")
-    height = metadata.get("height")
-    if width is None and height is None:
-        return
-    if not isinstance(width, int) or not isinstance(height, int) or isinstance(width, bool):
-        raise ApiError("image API returned malformed Artifact metadata")
-    expected_format = {
-        "image/png": "PNG",
-        "image/jpeg": "JPEG",
-        "image/webp": "WEBP",
-    }.get(expected_mime)
-    if expected_format is None:
-        raise ApiError("Artifact image MIME type cannot be verified")
-    try:
-        with Image.open(BytesIO(data)) as image:
-            actual_format = image.format
-            dimensions = image.size
-            image.verify()
-    except (OSError, UnidentifiedImageError) as error:
-        raise ApiError("Artifact download integrity check failed") from error
-    if actual_format != expected_format or dimensions != (width, height):
-        raise ApiError("Artifact download integrity check failed")
+        files.save_bytes_exclusive(buffer.getvalue(), rendered_output)
 
 
 def _safe_projection(value: Any) -> Any:

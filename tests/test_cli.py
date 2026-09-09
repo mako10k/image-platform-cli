@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from image_platform_cli.cli import (
+from image_platform_cli.common.models import DeterministicEditResult
+from image_platform_cli.v1.cli import (
     DEFAULT_LOGIN_SCOPES,
     _captured_input,
     _print_deterministic_result,
@@ -14,7 +15,6 @@ from image_platform_cli.cli import (
     main,
     parser,
 )
-from image_platform_cli.models import DeterministicEditResult
 
 
 def test_generate_exposes_safe_bounded_wait_controls_without_no_polling() -> None:
@@ -140,7 +140,7 @@ def test_cli_only_recipe_dry_run_does_not_construct_runtime_services(
     def reject_runtime_construction(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("CLI-only dry-run must not construct runtime services")
 
-    monkeypatch.setattr("image_platform_cli.cli.Config.staging", reject_runtime_construction)
+    monkeypatch.setattr("image_platform_cli.v1.cli.Config.staging", reject_runtime_construction)
 
     assert main(argv) == 0
 
@@ -160,7 +160,7 @@ def test_cli_only_program_dry_run_does_not_construct_runtime_services(
     def reject_runtime_construction(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("CLI-only dry-run must not construct runtime services")
 
-    monkeypatch.setattr("image_platform_cli.cli.Config.staging", reject_runtime_construction)
+    monkeypatch.setattr("image_platform_cli.v1.cli.Config.staging", reject_runtime_construction)
 
     assert (
         main(
