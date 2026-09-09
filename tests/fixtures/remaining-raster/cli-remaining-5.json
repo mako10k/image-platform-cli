@@ -1,0 +1,147 @@
+{
+  "args": [
+    "auto-crop",
+    "--mask",
+    "/tmp/cli-remaining-mask.png",
+    "--threshold",
+    "0.5",
+    "--padding",
+    "1"
+  ],
+  "mesh_spec": null,
+  "request": {
+    "program": {
+      "revision": "deterministic-edit-v1",
+      "inputs": {
+        "source": "image",
+        "selection": "mask"
+      },
+      "source_input": "source",
+      "commands": [
+        {
+          "id": "auto-crop",
+          "op": "auto_crop",
+          "coverage": {
+            "base": {
+              "source": {
+                "kind": "mask_input",
+                "input": "selection"
+              },
+              "transforms": []
+            },
+            "combine": []
+          },
+          "threshold": "0.5",
+          "padding": 1,
+          "aspect_ratio": null,
+          "empty_selection": "error"
+        }
+      ],
+      "encoding": {
+        "format": "png",
+        "quality": 90,
+        "png_compress_level": 9,
+        "jpeg_subsampling": "4:4:4",
+        "progressive": false,
+        "webp_method": 6,
+        "strip_metadata": true,
+        "output_profile": "srgb",
+        "alpha_policy": "preserve_or_flatten_white_v1"
+      },
+      "semantics": {
+        "coordinate_system": "top_left_pixel_edges_integer_v1",
+        "input_profile_policy": "convert_embedded_or_assume_srgb_v1",
+        "alpha_representation": "straight",
+        "edge_color_policy": "preserve_unassociated_rgb_v1",
+        "white_point_adaptation": "bradford_v1",
+        "hue_wrap": "signed_degrees_modulo_360_v1",
+        "rounding": "round_half_even_u8_v1",
+        "gamut_mode": "clip"
+      }
+    },
+    "inputs": {
+      "source": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAIUlEQVR4nGO8Iyfy34LLppEBB2DCJ8nAwMDAhE9yyCgAAASpBBsxbRxCAAAAAElFTkSuQmCC"
+      },
+      "selection": {
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAHElEQVR4nGNgQAeMDAz/GRgYGBmYYCJMGGowAQA0HAEGiPx4xwAAAABJRU5ErkJggg=="
+      }
+    }
+  },
+  "body": {
+    "data": {
+      "image": {
+        "mime_type": "image/png",
+        "sha256": "97f6f394d99a99aa5e5768cc3d233dcb1d7ef542450879776ac2bcf930de79a3",
+        "size_bytes": 79,
+        "width": 6,
+        "height": 5
+      },
+      "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAYAAAAFCAYAAABmWJ3mAAAAFklEQVR42mMU0QhoYMACmBhwACpKAACCdgEWPZGZYAAAAABJRU5ErkJggg==",
+      "receipt": {
+        "contract_revision": "deterministic-edit-v1",
+        "limits_revision": "deterministic-edit-limits-v1",
+        "implementation_revision": "cpu-raster-color-edit-v2",
+        "program_sha256": "566729bac24f21953ff1027abe3a123f882501c7b1d3b1895d7edc0aafba7873",
+        "input_sha256s": {
+          "source": "7e41b05dc54354bbf53ec43b5eea2aaeb0bd6129fc532a30b87ea7bea72f9ec4",
+          "selection": "6c31d82cc2d034658e3524fe9f9e6fe12aace8b537e89b4fedf85f8e213fcb2b"
+        },
+        "commands": [
+          {
+            "id": "auto-crop",
+            "op": "auto_crop",
+            "normalized_command_sha256": "814d631b5e4713f428523bbcb3c97737a0eb46e98cef088c39fd5f84086fbd7c",
+            "output_pixel_sha256": "34274def2f3bb5065f725d4b5d758238ae4918bb15ebc66ac105775e45373668"
+          }
+        ],
+        "output_sha256": "97f6f394d99a99aa5e5768cc3d233dcb1d7ef542450879776ac2bcf930de79a3",
+        "output_width": 6,
+        "output_height": 5
+      },
+      "planner_receipt": {
+        "contract_revision": "bounded-edit-planner-v1",
+        "implementation_revision": "split-and-fuse-in-order-v2",
+        "logical_program_sha256": "566729bac24f21953ff1027abe3a123f882501c7b1d3b1895d7edc0aafba7873",
+        "physical_graph_sha256": "d51cea851c2eee96d3971a1907387e8483e53c3c383371b493527c84e3d0fac6",
+        "max_color_sample_work": 4194304,
+        "applied_rule_ids": [],
+        "nodes": [
+          {
+            "step_id": "image_ops_1",
+            "width": 8,
+            "height": 8,
+            "color_sample_work": 0,
+            "command_ids": [
+              "auto-crop"
+            ],
+            "fused_command_groups": [],
+            "program_sha256": "566729bac24f21953ff1027abe3a123f882501c7b1d3b1895d7edc0aafba7873"
+          }
+        ]
+      },
+      "estimated_cost_usd": "0",
+      "actual_cost_usd": "0"
+    },
+    "meta": {
+      "request_id": "req_76750d246238422a9b9f8c256c9c2f32",
+      "api_version": "4",
+      "contract_revision": "2026-09-09-r8"
+    }
+  },
+  "headers": {
+    "x-image-sha256": "97f6f394d99a99aa5e5768cc3d233dcb1d7ef542450879776ac2bcf930de79a3",
+    "x-image-width": "6",
+    "x-image-height": "5",
+    "x-image-program-sha256": "566729bac24f21953ff1027abe3a123f882501c7b1d3b1895d7edc0aafba7873",
+    "x-image-implementation-revision": "cpu-raster-color-edit-v2",
+    "x-image-logical-program-sha256": "566729bac24f21953ff1027abe3a123f882501c7b1d3b1895d7edc0aafba7873",
+    "x-image-physical-graph-sha256": "d51cea851c2eee96d3971a1907387e8483e53c3c383371b493527c84e3d0fac6",
+    "content-length": "1785",
+    "content-type": "application/json",
+    "x-request-id": "req_76750d246238422a9b9f8c256c9c2f32",
+    "cache-control": "no-store"
+  }
+}

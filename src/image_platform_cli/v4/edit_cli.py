@@ -11,6 +11,7 @@ from typing import Any
 from ..common.errors import CliError
 from ..common.files import read_image, save_bytes_exclusive
 from ..common.geometry import _geometry_command
+from ..common.raster_programs import _raster_commands, _raster_input_paths
 from ..common.service import AuthService
 from .api import V4ApiClient
 from .color_matching import ColorMatchOptions
@@ -20,6 +21,7 @@ from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions
 from .program_cli import add_program_commands, run_cli_program
+from .program_schema import normalize_program
 from .project_quad import QuadOptions
 from .segment_cli import add_segment_command, coordinates, run_segment
 from .shapes import ShapeOptions
@@ -104,7 +106,22 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     canvas.add_argument("--x", type=int, default=0)
     canvas.add_argument("--y", type=int, default=0)
     canvas.add_argument("--background", type=coordinates(4), default=(0, 0, 0, 0))
+    adjust = raster.add_parser("adjust")
+    for flag in ("hue", "saturation", "exposure", "brightness", "contrast"):
+        adjust.add_argument(f"--{flag}", type=Decimal)
+    adjust.add_argument("--temperature", type=int)
+    adjust.add_argument("--tint", type=Decimal, default=Decimal(0))
+    auto_crop = raster.add_parser("auto-crop")
+    auto_crop.add_argument("--mask", type=Path, required=True)
+    auto_crop.add_argument("--threshold", type=Decimal, default=Decimal("0.01"))
+    auto_crop.add_argument("--padding", type=int, default=0)
+    mesh = raster.add_parser("mesh")
+    mesh.add_argument("--texture", type=Path, required=True)
+    mesh.add_argument("--mesh-spec", type=Path, required=True)
     for operation in (
+        adjust,
+        auto_crop,
+        mesh,
         crop,
         grayscale,
         filtering,
@@ -170,7 +187,12 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
         return
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
-        if args.raster_command in {"resize", "flip", "rotate", "canvas"}:
+        if args.raster_command in {"adjust", "auto-crop", "mesh"}:
+            inputs, masks = _raster_input_paths(args)
+            raster_result = api.run_program(
+                token, program=raster_program(args), paths={**inputs, **masks}
+            )
+        elif args.raster_command in {"resize", "flip", "rotate", "canvas"}:
             program = raster_program(args)
             raster_result = api.geometry_image(token, input_path=args.input, program=program)
         elif args.raster_command == "project-quad":
@@ -275,6 +297,20 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
+    if args.raster_command in {"adjust", "auto-crop", "mesh"}:
+        inputs, masks = _raster_input_paths(args)
+        return normalize_program(
+            {
+                "revision": "deterministic-edit-v1",
+                "inputs": {
+                    **{name: "image" for name in inputs},
+                    **{name: "mask" for name in masks},
+                },
+                "source_input": "source",
+                "commands": _raster_commands(args),
+                "encoding": {"format": "png"},
+            }
+        )
     if args.raster_command in {"resize", "flip", "rotate", "canvas"}:
         if args.raster_command == "canvas":
             from .shapes import rgba
