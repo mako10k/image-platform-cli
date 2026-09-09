@@ -40,6 +40,7 @@ from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
 from .matting import prepare_matting, verify_matting
+from .project_quad import QuadOptions
 from .protocol import route_contract, verify_response
 from .segmentation import SegmentSelector, prepare_segment, verify_segment
 from .shapes import ShapeOptions
@@ -103,6 +104,16 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def project_quad(
+        self, access_token: str, *, input_path: Path, texture_path: Path, options: QuadOptions
+    ) -> DeterministicEditResult:
+        payload, source = prepare_single_edit(
+            input_path, options.program(), extra_inputs={"texture": texture_path}
+        )
+        return self._single_image_operation(
+            access_token, payload, source, (source["width"], source["height"])
+        )
 
     def color_match(
         self,
