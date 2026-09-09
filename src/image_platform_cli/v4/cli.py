@@ -134,33 +134,39 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+def _prepare_output(args: argparse.Namespace) -> bool:
+    if (
+        args.group == "edit"
+        and args.command in {"run", "verify", "replace-object", "replace-background"}
+        and prepare_cli_program(args)
+    ):
+        return True
+    if args.group == "edit" and args.command == "raster":
+        program = raster_program(args)
+        if args.dry_run:
+            print(json.dumps(program, sort_keys=True))
+            return True
+        if args.output is None:
+            raise CliError("--output is required unless --dry-run is used")
+    if args.group == "edit" and args.command == "segment":
+        validate_segment_outputs(args)
+    elif args.group in {"generate", "edit"} and getattr(args, "command", None) not in {
+        "run",
+        "verify",
+        "replace-object",
+        "replace-background",
+    }:
+        require_available_output(args.output)
+    return False
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.group == "help":
         return _show_help(args.topic)
     try:
-        if (
-            args.group == "edit"
-            and args.command in {"run", "verify", "replace-object", "replace-background"}
-            and prepare_cli_program(args)
-        ):
+        if _prepare_output(args):
             return 0
-        if args.group == "edit" and args.command == "raster":
-            program = raster_program(args)
-            if args.dry_run:
-                print(json.dumps(program, sort_keys=True))
-                return 0
-            if args.output is None:
-                raise CliError("--output is required unless --dry-run is used")
-        if args.group == "edit" and args.command == "segment":
-            validate_segment_outputs(args)
-        elif args.group in {"generate", "edit"} and getattr(args, "command", None) not in {
-            "run",
-            "verify",
-            "replace-object",
-            "replace-background",
-        }:
-            require_available_output(args.output)
         config = Config.staging()
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0)) as http:
             service = AuthService(

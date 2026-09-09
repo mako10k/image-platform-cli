@@ -62,7 +62,7 @@ the capability is not yet verified in `image4` and blocks default cutover.
 
 ## Current cutover state
 
-All 49 inventoried leaves are covered by the two `local-common` rows and 31 `V4-bound` rows.
+All 49 inventoried leaves are covered by the two `local-common` rows and 35 `V4-bound` rows.
 There are no `missing` rows. This establishes local functional implementation coverage, not final
 cutover readiness: the owner limited recent verification to focused impact tests. Current full
 static, built-package and overall acceptance checks remain pending. The stable `image` dispatcher

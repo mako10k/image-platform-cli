@@ -33,16 +33,10 @@ def prepare_program(
     return {"program": program, "inputs": inputs}, metadata
 
 
-def verify_program(
-    response: httpx.Response, data: dict[str, Any], program: dict[str, Any], inputs: dict[str, Any]
-) -> DeterministicEditResult:
-    raw = decode_output(data)
-    cost = number(data["actual_cost_usd"])
-    number(data["estimated_cost_usd"])
-    receipt, image = data["receipt"], data["image"]
-    verify_single_edit_headers(response, image, receipt)
+def verify_planner(
+    response: httpx.Response, planner: dict[str, Any] | None, program: dict[str, Any]
+) -> tuple[list[dict[str, Any]], bool]:
     commands = program["commands"]
-    planner = data["planner_receipt"]
     final_commands = commands
     split = False
     if planner is not None:
@@ -71,6 +65,18 @@ def verify_program(
         for key in ("x-image-logical-program-sha256", "x-image-physical-graph-sha256")
     ):
         raise ApiError("planner headers require a receipt")
+    return final_commands, split
+
+
+def verify_program(
+    response: httpx.Response, data: dict[str, Any], program: dict[str, Any], inputs: dict[str, Any]
+) -> DeterministicEditResult:
+    raw = decode_output(data)
+    cost = number(data["actual_cost_usd"])
+    number(data["estimated_cost_usd"])
+    receipt, image = data["receipt"], data["image"]
+    verify_single_edit_headers(response, image, receipt)
+    final_commands, split = verify_planner(response, data["planner_receipt"], program)
     expected_program = {**program, "commands": final_commands}
     if receipt["program_sha256"] != canonical_hash(expected_program):
         raise ApiError("execution program differs from the request")
