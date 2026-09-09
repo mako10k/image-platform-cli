@@ -1,0 +1,2239 @@
+{
+  "$defs": {
+    "AffineCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "affine",
+          "default": "affine",
+          "title": "Op",
+          "type": "string"
+        },
+        "transform": {
+          "$ref": "#/$defs/AffineMatrix"
+        },
+        "output_width": {
+          "exclusiveMinimum": 0,
+          "maximum": 8192,
+          "title": "Output Width",
+          "type": "integer"
+        },
+        "output_height": {
+          "exclusiveMinimum": 0,
+          "maximum": 8192,
+          "title": "Output Height",
+          "type": "integer"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/Interpolation",
+          "default": "bicubic"
+        },
+        "border": {
+          "$ref": "#/$defs/BorderMode",
+          "default": "transparent"
+        },
+        "background": {
+          "$ref": "#/$defs/RgbaColor"
+        }
+      },
+      "required": [
+        "id",
+        "transform",
+        "output_width",
+        "output_height"
+      ],
+      "title": "AffineCommand",
+      "type": "object"
+    },
+    "AffineMatrix": {
+      "additionalProperties": false,
+      "description": "Forward 2D affine matrix using exact decimal inputs.",
+      "properties": {
+        "a": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "A"
+        },
+        "b": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "B"
+        },
+        "c": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "C"
+        },
+        "d": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "D"
+        },
+        "e": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "E"
+        },
+        "f": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "F"
+        }
+      },
+      "title": "AffineMatrix",
+      "type": "object"
+    },
+    "AlphaEdgeDecontaminateCommand": {
+      "additionalProperties": false,
+      "description": "Replace contaminated edge RGB from nearby high-confidence foreground.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "alpha_edge_decontaminate",
+          "default": "alpha_edge_decontaminate",
+          "title": "Op",
+          "type": "string"
+        },
+        "alpha_min": {
+          "default": 1,
+          "maximum": 254,
+          "minimum": 1,
+          "title": "Alpha Min",
+          "type": "integer"
+        },
+        "alpha_max": {
+          "default": 239,
+          "maximum": 254,
+          "minimum": 1,
+          "title": "Alpha Max",
+          "type": "integer"
+        },
+        "foreground_alpha_min": {
+          "default": 240,
+          "maximum": 255,
+          "minimum": 2,
+          "title": "Foreground Alpha Min",
+          "type": "integer"
+        },
+        "radius": {
+          "default": 3,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Radius",
+          "type": "integer"
+        },
+        "strength": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "Strength"
+        },
+        "transparent_rgb_policy": {
+          "const": "preserve_unassociated_rgb_v1",
+          "default": "preserve_unassociated_rgb_v1",
+          "title": "Transparent Rgb Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "AlphaEdgeDecontaminateCommand",
+      "type": "object"
+    },
+    "ApplyCoverageCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "apply_coverage",
+          "default": "apply_coverage",
+          "title": "Op",
+          "type": "string"
+        },
+        "coverage": {
+          "$ref": "#/$defs/CoverageSpec"
+        },
+        "mode": {
+          "$ref": "#/$defs/CoverageApplyMode",
+          "default": "multiply_alpha"
+        }
+      },
+      "required": [
+        "id",
+        "coverage"
+      ],
+      "title": "ApplyCoverageCommand",
+      "type": "object"
+    },
+    "AspectRatio": {
+      "additionalProperties": false,
+      "properties": {
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 8192,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 8192,
+          "title": "Height",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "title": "AspectRatio",
+      "type": "object"
+    },
+    "AutoCropCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "auto_crop",
+          "default": "auto_crop",
+          "title": "Op",
+          "type": "string"
+        },
+        "coverage": {
+          "$ref": "#/$defs/CoverageSpec"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0.01",
+          "title": "Threshold"
+        },
+        "padding": {
+          "default": 0,
+          "maximum": 8192,
+          "minimum": 0,
+          "title": "Padding",
+          "type": "integer"
+        },
+        "aspect_ratio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AspectRatio"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "empty_selection": {
+          "$ref": "#/$defs/EmptySelectionMode",
+          "default": "error"
+        }
+      },
+      "required": [
+        "id",
+        "coverage"
+      ],
+      "title": "AutoCropCommand",
+      "type": "object"
+    },
+    "BlurCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "gaussian_blur",
+            "feather"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 64.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Radius"
+        },
+        "border": {
+          "$ref": "#/$defs/BorderMode",
+          "default": "transparent"
+        }
+      },
+      "required": [
+        "op",
+        "radius"
+      ],
+      "title": "BlurCoverage",
+      "type": "object"
+    },
+    "BorderBackgroundCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "border_background",
+          "default": "border_background",
+          "title": "Kind",
+          "type": "string"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input"
+        },
+        "tolerance": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0.05",
+          "title": "Tolerance"
+        },
+        "connectivity": {
+          "default": 8,
+          "enum": [
+            4,
+            8
+          ],
+          "title": "Connectivity",
+          "type": "integer"
+        }
+      },
+      "title": "BorderBackgroundCoverage",
+      "type": "object"
+    },
+    "BorderMode": {
+      "description": "Sampling behavior outside an input image.",
+      "enum": [
+        "transparent",
+        "constant",
+        "clamp",
+        "reflect"
+      ],
+      "title": "BorderMode",
+      "type": "string"
+    },
+    "CanvasAlphaCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "canvas_alpha",
+          "default": "canvas_alpha",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "CanvasAlphaCoverage",
+      "type": "object"
+    },
+    "ColorKeyCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "color_key",
+          "default": "color_key",
+          "title": "Kind",
+          "type": "string"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input"
+        },
+        "color": {
+          "$ref": "#/$defs/RgbaColor"
+        },
+        "tolerance": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Tolerance"
+        },
+        "include_alpha": {
+          "default": false,
+          "title": "Include Alpha",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "color"
+      ],
+      "title": "ColorKeyCoverage",
+      "type": "object"
+    },
+    "ColorMatchAlgorithm": {
+      "enum": [
+        "lab_mean_std_v1",
+        "lab_histogram_256_v1"
+      ],
+      "title": "ColorMatchAlgorithm",
+      "type": "string"
+    },
+    "ColorMatchCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "color_match",
+          "default": "color_match",
+          "title": "Op",
+          "type": "string"
+        },
+        "reference_input": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Reference Input",
+          "type": "string"
+        },
+        "algorithm": {
+          "$ref": "#/$defs/ColorMatchAlgorithm"
+        },
+        "strength": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "Strength"
+        },
+        "preserve_luminance": {
+          "default": false,
+          "title": "Preserve Luminance",
+          "type": "boolean"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "reference_input",
+        "algorithm"
+      ],
+      "title": "ColorMatchCommand",
+      "type": "object"
+    },
+    "CompositeMode": {
+      "description": "Small compositing allowlist for deterministic programs.",
+      "enum": [
+        "source_over",
+        "replace",
+        "multiply",
+        "screen"
+      ],
+      "title": "CompositeMode",
+      "type": "string"
+    },
+    "ConvertCommand": {
+      "additionalProperties": false,
+      "description": "Pixel-preserving command used when only the explicit encoder changes.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "convert",
+          "default": "convert",
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "ConvertCommand",
+      "type": "object"
+    },
+    "CoverageApplyMode": {
+      "enum": [
+        "replace_alpha",
+        "multiply_alpha"
+      ],
+      "title": "CoverageApplyMode",
+      "type": "string"
+    },
+    "CoverageCombine": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/CoverageCombineMode"
+        },
+        "layer": {
+          "$ref": "#/$defs/CoverageLayer"
+        }
+      },
+      "required": [
+        "mode",
+        "layer"
+      ],
+      "title": "CoverageCombine",
+      "type": "object"
+    },
+    "CoverageCombineMode": {
+      "enum": [
+        "union",
+        "intersection",
+        "subtract"
+      ],
+      "title": "CoverageCombineMode",
+      "type": "string"
+    },
+    "CoverageLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "discriminator": {
+            "mapping": {
+              "border_background": "#/$defs/BorderBackgroundCoverage",
+              "canvas_alpha": "#/$defs/CanvasAlphaCoverage",
+              "color_key": "#/$defs/ColorKeyCoverage",
+              "luminance": "#/$defs/LuminanceCoverage",
+              "mask_input": "#/$defs/MaskInputCoverage"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CanvasAlphaCoverage"
+            },
+            {
+              "$ref": "#/$defs/MaskInputCoverage"
+            },
+            {
+              "$ref": "#/$defs/LuminanceCoverage"
+            },
+            {
+              "$ref": "#/$defs/ColorKeyCoverage"
+            },
+            {
+              "$ref": "#/$defs/BorderBackgroundCoverage"
+            }
+          ],
+          "title": "Source"
+        },
+        "transforms": {
+          "default": [],
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "dilate": "#/$defs/MorphologyCoverage",
+                "erode": "#/$defs/MorphologyCoverage",
+                "feather": "#/$defs/BlurCoverage",
+                "gaussian_blur": "#/$defs/BlurCoverage",
+                "invert": "#/$defs/InvertCoverage",
+                "levels": "#/$defs/LevelsCoverage",
+                "threshold": "#/$defs/ThresholdCoverage"
+              },
+              "propertyName": "op"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ThresholdCoverage"
+              },
+              {
+                "$ref": "#/$defs/LevelsCoverage"
+              },
+              {
+                "$ref": "#/$defs/InvertCoverage"
+              },
+              {
+                "$ref": "#/$defs/MorphologyCoverage"
+              },
+              {
+                "$ref": "#/$defs/BlurCoverage"
+              }
+            ]
+          },
+          "maxItems": 16,
+          "title": "Transforms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "CoverageLayer",
+      "type": "object"
+    },
+    "CoverageSpec": {
+      "additionalProperties": false,
+      "description": "Normalized 0..1 coverage with bounded source combination and filtering.",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/CoverageLayer"
+        },
+        "combine": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CoverageCombine"
+          },
+          "maxItems": 8,
+          "title": "Combine",
+          "type": "array"
+        }
+      },
+      "required": [
+        "base"
+      ],
+      "title": "CoverageSpec",
+      "type": "object"
+    },
+    "CropCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "crop",
+          "default": "crop",
+          "title": "Op",
+          "type": "string"
+        },
+        "rect": {
+          "$ref": "#/$defs/PixelRect"
+        }
+      },
+      "required": [
+        "id",
+        "rect"
+      ],
+      "title": "CropCommand",
+      "type": "object"
+    },
+    "DepthMode": {
+      "enum": [
+        "painters_order",
+        "z_buffer"
+      ],
+      "title": "DepthMode",
+      "type": "string"
+    },
+    "DeterministicOutputEncoding": {
+      "additionalProperties": false,
+      "description": "Explicit encoder settings recorded with the implementation revision.",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/OutputFormat",
+          "default": "png"
+        },
+        "quality": {
+          "default": 90,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Quality",
+          "type": "integer"
+        },
+        "png_compress_level": {
+          "default": 9,
+          "maximum": 9,
+          "minimum": 0,
+          "title": "Png Compress Level",
+          "type": "integer"
+        },
+        "jpeg_subsampling": {
+          "const": "4:4:4",
+          "default": "4:4:4",
+          "title": "Jpeg Subsampling",
+          "type": "string"
+        },
+        "progressive": {
+          "const": false,
+          "default": false,
+          "title": "Progressive",
+          "type": "boolean"
+        },
+        "webp_method": {
+          "default": 6,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Webp Method",
+          "type": "integer"
+        },
+        "strip_metadata": {
+          "const": true,
+          "default": true,
+          "title": "Strip Metadata",
+          "type": "boolean"
+        },
+        "output_profile": {
+          "const": "srgb",
+          "default": "srgb",
+          "title": "Output Profile",
+          "type": "string"
+        },
+        "alpha_policy": {
+          "const": "preserve_or_flatten_white_v1",
+          "default": "preserve_or_flatten_white_v1",
+          "title": "Alpha Policy",
+          "type": "string"
+        }
+      },
+      "title": "DeterministicOutputEncoding",
+      "type": "object"
+    },
+    "DrawShapeCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "draw_shape",
+          "default": "draw_shape",
+          "title": "Op",
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/ShapeKind"
+        },
+        "rect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PixelRect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "points": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PixelPoint"
+          },
+          "maxItems": 4096,
+          "title": "Points",
+          "type": "array"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RgbaColor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RgbaColor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stroke_width": {
+          "default": 1,
+          "maximum": 1024,
+          "minimum": 1,
+          "title": "Stroke Width",
+          "type": "integer"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "shape"
+      ],
+      "title": "DrawShapeCommand",
+      "type": "object"
+    },
+    "DrawTextCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "draw_text",
+          "default": "draw_text",
+          "title": "Op",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/PixelPoint"
+        },
+        "font": {
+          "$ref": "#/$defs/RegisteredFontRef"
+        },
+        "font_size_px": {
+          "maximum": 2048,
+          "minimum": 1,
+          "title": "Font Size Px",
+          "type": "integer"
+        },
+        "fill": {
+          "$ref": "#/$defs/RgbaColor"
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RgbaColor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stroke_width": {
+          "default": 0,
+          "maximum": 128,
+          "minimum": 0,
+          "title": "Stroke Width",
+          "type": "integer"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "position",
+        "font",
+        "font_size_px",
+        "fill"
+      ],
+      "title": "DrawTextCommand",
+      "type": "object"
+    },
+    "EditInputKind": {
+      "description": "Artifact kinds accepted by the deterministic edit program.",
+      "enum": [
+        "image",
+        "mask"
+      ],
+      "title": "EditInputKind",
+      "type": "string"
+    },
+    "EmptySelectionMode": {
+      "enum": [
+        "error",
+        "keep_canvas"
+      ],
+      "title": "EmptySelectionMode",
+      "type": "string"
+    },
+    "FilterCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "filter",
+          "default": "filter",
+          "title": "Op",
+          "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/FilterKind"
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 64.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Radius"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "maximum": 16.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "Amount"
+        },
+        "border": {
+          "$ref": "#/$defs/BorderMode",
+          "default": "reflect"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "filter",
+        "radius"
+      ],
+      "title": "FilterCommand",
+      "type": "object"
+    },
+    "FilterKind": {
+      "enum": [
+        "gaussian_blur",
+        "box_blur",
+        "unsharp_mask"
+      ],
+      "title": "FilterKind",
+      "type": "string"
+    },
+    "GamutMode": {
+      "enum": [
+        "clip",
+        "oklch_chroma_reduce_v1"
+      ],
+      "title": "GamutMode",
+      "type": "string"
+    },
+    "GrayscaleCommand": {
+      "additionalProperties": false,
+      "description": "Exact-channel grayscale using frozen linear-sRGB Rec. 709 luminance.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "grayscale",
+          "default": "grayscale",
+          "title": "Op",
+          "type": "string"
+        },
+        "luminance": {
+          "const": "rec709_linear_srgb_v1",
+          "default": "rec709_linear_srgb_v1",
+          "title": "Luminance",
+          "type": "string"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "GrayscaleCommand",
+      "type": "object"
+    },
+    "HueSaturationCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "hue_saturation",
+          "default": "hue_saturation",
+          "title": "Op",
+          "type": "string"
+        },
+        "hue_degrees": {
+          "anyOf": [
+            {
+              "maximum": 180.0,
+              "minimum": -180.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Hue Degrees"
+        },
+        "saturation_scale": {
+          "anyOf": [
+            {
+              "maximum": 4.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Saturation Scale"
+        },
+        "working_space": {
+          "$ref": "#/$defs/WorkingColorSpace",
+          "default": "cie_lab_d50"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "hue_degrees",
+        "saturation_scale"
+      ],
+      "title": "HueSaturationCommand",
+      "type": "object"
+    },
+    "Interpolation": {
+      "description": "Version-independent interpolation intent resolved by CPU ImageOps.",
+      "enum": [
+        "nearest",
+        "bilinear",
+        "bicubic",
+        "lanczos"
+      ],
+      "title": "Interpolation",
+      "type": "string"
+    },
+    "InvertCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "invert",
+          "default": "invert",
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "title": "InvertCoverage",
+      "type": "object"
+    },
+    "LevelsCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "levels",
+          "default": "levels",
+          "title": "Op",
+          "type": "string"
+        },
+        "black": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Black"
+        },
+        "white": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "White"
+        }
+      },
+      "required": [
+        "black",
+        "white"
+      ],
+      "title": "LevelsCoverage",
+      "type": "object"
+    },
+    "LightingMode": {
+      "enum": [
+        "unlit",
+        "flat_lambert"
+      ],
+      "title": "LightingMode",
+      "type": "string"
+    },
+    "LuminanceCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "luminance",
+          "default": "luminance",
+          "title": "Kind",
+          "type": "string"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input"
+        },
+        "lower": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Lower"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "Upper"
+        }
+      },
+      "title": "LuminanceCoverage",
+      "type": "object"
+    },
+    "MaskInputCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "mask_input",
+          "default": "mask_input",
+          "title": "Kind",
+          "type": "string"
+        },
+        "input": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Input",
+          "type": "string"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "title": "MaskInputCoverage",
+      "type": "object"
+    },
+    "MeshTriangle": {
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "maximum": 4095,
+          "minimum": 0,
+          "title": "A",
+          "type": "integer"
+        },
+        "b": {
+          "maximum": 4095,
+          "minimum": 0,
+          "title": "B",
+          "type": "integer"
+        },
+        "c": {
+          "maximum": 4095,
+          "minimum": 0,
+          "title": "C",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b",
+        "c"
+      ],
+      "title": "MeshTriangle",
+      "type": "object"
+    },
+    "MeshVertex": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "X"
+        },
+        "y": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Y"
+        },
+        "z": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Z"
+        },
+        "u": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "U"
+        },
+        "v": {
+          "anyOf": [
+            {
+              "maximum": 65536.0,
+              "minimum": -65536.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "V"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "u",
+        "v"
+      ],
+      "title": "MeshVertex",
+      "type": "object"
+    },
+    "MorphologyCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "dilate",
+            "erode"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "radius": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Radius",
+          "type": "integer"
+        },
+        "shape": {
+          "$ref": "#/$defs/MorphologyShape",
+          "default": "disk"
+        }
+      },
+      "required": [
+        "op",
+        "radius"
+      ],
+      "title": "MorphologyCoverage",
+      "type": "object"
+    },
+    "MorphologyShape": {
+      "enum": [
+        "disk",
+        "square"
+      ],
+      "title": "MorphologyShape",
+      "type": "string"
+    },
+    "OutputFormat": {
+      "enum": [
+        "png",
+        "jpeg",
+        "webp"
+      ],
+      "title": "OutputFormat",
+      "type": "string"
+    },
+    "PasteImageCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "paste_image",
+          "default": "paste_image",
+          "title": "Op",
+          "type": "string"
+        },
+        "input": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Input",
+          "type": "string"
+        },
+        "transform": {
+          "$ref": "#/$defs/AffineMatrix"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/Interpolation",
+          "default": "bicubic"
+        },
+        "border": {
+          "$ref": "#/$defs/BorderMode",
+          "default": "transparent"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "Opacity"
+        },
+        "composite": {
+          "$ref": "#/$defs/CompositeMode",
+          "default": "source_over"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "input"
+      ],
+      "title": "PasteImageCommand",
+      "type": "object"
+    },
+    "PixelPoint": {
+      "additionalProperties": false,
+      "description": "Integer coordinate on top-left-origin pixel edges.",
+      "properties": {
+        "x": {
+          "maximum": 1000000,
+          "minimum": -1000000,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1000000,
+          "minimum": -1000000,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "PixelPoint",
+      "type": "object"
+    },
+    "PixelRect": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "maximum": 1000000,
+          "minimum": -1000000,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1000000,
+          "minimum": -1000000,
+          "title": "Y",
+          "type": "integer"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 8192,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 8192,
+          "title": "Height",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "PixelRect",
+      "type": "object"
+    },
+    "ProjectQuadCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "project_quad",
+          "default": "project_quad",
+          "title": "Op",
+          "type": "string"
+        },
+        "texture_input": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Texture Input",
+          "type": "string"
+        },
+        "destination": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/PixelPoint"
+            },
+            {
+              "$ref": "#/$defs/PixelPoint"
+            },
+            {
+              "$ref": "#/$defs/PixelPoint"
+            },
+            {
+              "$ref": "#/$defs/PixelPoint"
+            }
+          ],
+          "title": "Destination",
+          "type": "array"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/Interpolation",
+          "default": "bilinear"
+        },
+        "composite": {
+          "$ref": "#/$defs/CompositeMode",
+          "default": "source_over"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "texture_input",
+        "destination"
+      ],
+      "title": "ProjectQuadCommand",
+      "type": "object"
+    },
+    "RasterSemantics": {
+      "additionalProperties": false,
+      "description": "Global semantics that remove implicit library defaults.",
+      "properties": {
+        "coordinate_system": {
+          "const": "top_left_pixel_edges_integer_v1",
+          "default": "top_left_pixel_edges_integer_v1",
+          "title": "Coordinate System",
+          "type": "string"
+        },
+        "input_profile_policy": {
+          "const": "convert_embedded_or_assume_srgb_v1",
+          "default": "convert_embedded_or_assume_srgb_v1",
+          "title": "Input Profile Policy",
+          "type": "string"
+        },
+        "alpha_representation": {
+          "const": "straight",
+          "default": "straight",
+          "title": "Alpha Representation",
+          "type": "string"
+        },
+        "edge_color_policy": {
+          "const": "preserve_unassociated_rgb_v1",
+          "default": "preserve_unassociated_rgb_v1",
+          "title": "Edge Color Policy",
+          "type": "string"
+        },
+        "white_point_adaptation": {
+          "const": "bradford_v1",
+          "default": "bradford_v1",
+          "title": "White Point Adaptation",
+          "type": "string"
+        },
+        "hue_wrap": {
+          "const": "signed_degrees_modulo_360_v1",
+          "default": "signed_degrees_modulo_360_v1",
+          "title": "Hue Wrap",
+          "type": "string"
+        },
+        "rounding": {
+          "const": "round_half_even_u8_v1",
+          "default": "round_half_even_u8_v1",
+          "title": "Rounding",
+          "type": "string"
+        },
+        "gamut_mode": {
+          "$ref": "#/$defs/GamutMode",
+          "default": "clip"
+        }
+      },
+      "title": "RasterSemantics",
+      "type": "object"
+    },
+    "RegisteredFontRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "sha256"
+      ],
+      "title": "RegisteredFontRef",
+      "type": "object"
+    },
+    "RenderMeshCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "render_mesh",
+          "default": "render_mesh",
+          "title": "Op",
+          "type": "string"
+        },
+        "texture_input": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Texture Input",
+          "type": "string"
+        },
+        "vertices": {
+          "items": {
+            "$ref": "#/$defs/MeshVertex"
+          },
+          "maxItems": 4096,
+          "minItems": 3,
+          "title": "Vertices",
+          "type": "array"
+        },
+        "triangles": {
+          "items": {
+            "$ref": "#/$defs/MeshTriangle"
+          },
+          "maxItems": 8192,
+          "minItems": 1,
+          "title": "Triangles",
+          "type": "array"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/Interpolation",
+          "default": "bilinear"
+        },
+        "depth": {
+          "$ref": "#/$defs/DepthMode",
+          "default": "z_buffer"
+        },
+        "lighting": {
+          "$ref": "#/$defs/LightingMode",
+          "default": "unlit"
+        },
+        "ambient": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "Ambient"
+        },
+        "composite": {
+          "$ref": "#/$defs/CompositeMode",
+          "default": "source_over"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "texture_input",
+        "vertices",
+        "triangles"
+      ],
+      "title": "RenderMeshCommand",
+      "type": "object"
+    },
+    "RgbaColor": {
+      "additionalProperties": false,
+      "properties": {
+        "r": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "R",
+          "type": "integer"
+        },
+        "g": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "G",
+          "type": "integer"
+        },
+        "b": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "B",
+          "type": "integer"
+        },
+        "a": {
+          "default": 255,
+          "maximum": 255,
+          "minimum": 0,
+          "title": "A",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "r",
+        "g",
+        "b"
+      ],
+      "title": "RgbaColor",
+      "type": "object"
+    },
+    "ShapeKind": {
+      "enum": [
+        "rectangle",
+        "ellipse",
+        "line",
+        "polygon"
+      ],
+      "title": "ShapeKind",
+      "type": "string"
+    },
+    "ThresholdCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "threshold",
+          "default": "threshold",
+          "title": "Op",
+          "type": "string"
+        },
+        "cutoff": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Cutoff"
+        }
+      },
+      "required": [
+        "cutoff"
+      ],
+      "title": "ThresholdCoverage",
+      "type": "object"
+    },
+    "ToneCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "tone",
+          "default": "tone",
+          "title": "Op",
+          "type": "string"
+        },
+        "exposure_stops": {
+          "anyOf": [
+            {
+              "maximum": 10.0,
+              "minimum": -10.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Exposure Stops"
+        },
+        "luminance": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Luminance"
+        },
+        "brightness": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Brightness"
+        },
+        "contrast": {
+          "anyOf": [
+            {
+              "maximum": 4.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "1",
+          "title": "Contrast"
+        },
+        "working_space": {
+          "$ref": "#/$defs/WorkingColorSpace",
+          "default": "linear_srgb"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "ToneCommand",
+      "type": "object"
+    },
+    "WhiteBalanceCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "white_balance",
+          "default": "white_balance",
+          "title": "Op",
+          "type": "string"
+        },
+        "temperature_kelvin": {
+          "maximum": 40000,
+          "minimum": 1000,
+          "title": "Temperature Kelvin",
+          "type": "integer"
+        },
+        "tint": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Tint"
+        },
+        "working_space": {
+          "$ref": "#/$defs/WorkingColorSpace",
+          "default": "linear_srgb"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "temperature_kelvin"
+      ],
+      "title": "WhiteBalanceCommand",
+      "type": "object"
+    },
+    "WorkingColorSpace": {
+      "enum": [
+        "srgb",
+        "linear_srgb",
+        "cie_lab_d50"
+      ],
+      "title": "WorkingColorSpace",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A bounded linear program carried by one native ``image_ops`` Pipeline step.",
+  "properties": {
+    "revision": {
+      "const": "deterministic-edit-v1",
+      "default": "deterministic-edit-v1",
+      "title": "Revision",
+      "type": "string"
+    },
+    "inputs": {
+      "maxProperties": 16,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9_-]{0,63}$": {
+          "$ref": "#/$defs/EditInputKind"
+        }
+      },
+      "title": "Inputs",
+      "type": "object"
+    },
+    "source_input": {
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Input",
+      "type": "string"
+    },
+    "semantics": {
+      "$ref": "#/$defs/RasterSemantics"
+    },
+    "commands": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "affine": "#/$defs/AffineCommand",
+            "alpha_edge_decontaminate": "#/$defs/AlphaEdgeDecontaminateCommand",
+            "apply_coverage": "#/$defs/ApplyCoverageCommand",
+            "auto_crop": "#/$defs/AutoCropCommand",
+            "color_match": "#/$defs/ColorMatchCommand",
+            "convert": "#/$defs/ConvertCommand",
+            "crop": "#/$defs/CropCommand",
+            "draw_shape": "#/$defs/DrawShapeCommand",
+            "draw_text": "#/$defs/DrawTextCommand",
+            "filter": "#/$defs/FilterCommand",
+            "grayscale": "#/$defs/GrayscaleCommand",
+            "hue_saturation": "#/$defs/HueSaturationCommand",
+            "paste_image": "#/$defs/PasteImageCommand",
+            "project_quad": "#/$defs/ProjectQuadCommand",
+            "render_mesh": "#/$defs/RenderMeshCommand",
+            "tone": "#/$defs/ToneCommand",
+            "white_balance": "#/$defs/WhiteBalanceCommand"
+          },
+          "propertyName": "op"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/DrawShapeCommand"
+          },
+          {
+            "$ref": "#/$defs/DrawTextCommand"
+          },
+          {
+            "$ref": "#/$defs/PasteImageCommand"
+          },
+          {
+            "$ref": "#/$defs/CropCommand"
+          },
+          {
+            "$ref": "#/$defs/ConvertCommand"
+          },
+          {
+            "$ref": "#/$defs/AutoCropCommand"
+          },
+          {
+            "$ref": "#/$defs/FilterCommand"
+          },
+          {
+            "$ref": "#/$defs/AffineCommand"
+          },
+          {
+            "$ref": "#/$defs/ApplyCoverageCommand"
+          },
+          {
+            "$ref": "#/$defs/AlphaEdgeDecontaminateCommand"
+          },
+          {
+            "$ref": "#/$defs/GrayscaleCommand"
+          },
+          {
+            "$ref": "#/$defs/HueSaturationCommand"
+          },
+          {
+            "$ref": "#/$defs/WhiteBalanceCommand"
+          },
+          {
+            "$ref": "#/$defs/ToneCommand"
+          },
+          {
+            "$ref": "#/$defs/ColorMatchCommand"
+          },
+          {
+            "$ref": "#/$defs/ProjectQuadCommand"
+          },
+          {
+            "$ref": "#/$defs/RenderMeshCommand"
+          }
+        ]
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Commands",
+      "type": "array"
+    },
+    "encoding": {
+      "$ref": "#/$defs/DeterministicOutputEncoding"
+    }
+  },
+  "required": [
+    "inputs",
+    "source_input",
+    "commands"
+  ],
+  "title": "DeterministicEditProgram",
+  "type": "object"
+}

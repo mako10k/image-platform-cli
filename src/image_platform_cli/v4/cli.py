@@ -18,6 +18,7 @@ from ..common.service import AuthService
 from ..common.tokens import TokenValidator
 from .api import QueryScalar, V4ApiClient
 from .edit_cli import add_edit_commands, raster_program, run_edit
+from .program_cli import prepare_cli_program
 from .segment_cli import validate_segment_outputs
 
 DEFAULT_LOGIN_SCOPES = (
@@ -138,6 +139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.group == "help":
         return _show_help(args.topic)
     try:
+        if args.group == "edit" and args.command in {"run", "verify"} and prepare_cli_program(args):
+            return 0
         if args.group == "edit" and args.command == "raster":
             program = raster_program(args)
             if args.dry_run:
@@ -147,7 +150,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise CliError("--output is required unless --dry-run is used")
         if args.group == "edit" and args.command == "segment":
             validate_segment_outputs(args)
-        elif args.group in {"generate", "edit"}:
+        elif args.group in {"generate", "edit"} and getattr(args, "command", None) not in {
+            "run",
+            "verify",
+        }:
             require_available_output(args.output)
         config = Config.staging()
         with httpx.Client(timeout=httpx.Timeout(180.0, connect=10.0)) as http:
