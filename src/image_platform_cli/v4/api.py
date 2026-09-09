@@ -28,6 +28,7 @@ from ..common.inputs import (
 from ..common.models import GeneratedImage
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
 from .image_edits import ImageToImageOptions, verified_image
+from .inpaint import prepare_inpaint, verify_inpaint
 from .protocol import route_contract, verify_response
 
 API_VERSION = "4"
@@ -87,6 +88,25 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def inpaint(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        mask_path: Path,
+        prompt: str,
+        seed: int,
+        profile: str = "inpaint-stable-diffusion-v1-5",
+        safety_filter: str = "default",
+    ) -> GeneratedImage:
+        payload, source, mask = prepare_inpaint(
+            input_path, mask_path, prompt, seed, profile, safety_filter
+        )
+        response, envelope = self._exchange("POST", "/v4/inpaints", access_token, json=payload)
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        return verify_inpaint(response, self._object(envelope["data"]), payload, source, mask)
 
     def image_to_image(
         self,

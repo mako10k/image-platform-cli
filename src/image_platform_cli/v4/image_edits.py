@@ -1,7 +1,5 @@
 """Image-to-image controls and result integrity for the accepted V4 r8 boundary."""
 
-import base64
-import binascii
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -9,8 +7,8 @@ from typing import Any
 import httpx
 
 from ..common.errors import ApiError
-from ..common.files import verify_artifact
 from ..common.models import GeneratedImage
+from .image_results import decode_output, verify_image_headers
 
 
 @dataclass(frozen=True)
@@ -79,11 +77,7 @@ def verified_image(
 ) -> GeneratedImage:
     output, receipt = data["output"], data["receipt"]
     metadata = output["image"]
-    try:
-        raw = base64.b64decode(output["data_base64"], validate=True)
-    except (ValueError, binascii.Error) as error:
-        raise ApiError("image-to-image output is not valid Base64") from error
-    verify_artifact(raw, metadata["mime_type"], metadata)
+    raw = decode_output(output)
     expected_controls = {
         "strength": Decimal(payload["strength"]),
         "guidance_scale": Decimal(payload["guidance_scale"]),
@@ -96,8 +90,6 @@ def verified_image(
     try:
         for key in ("strength", "guidance_scale"):
             controls[key] = Decimal(str(controls[key]))
-        cost = Decimal(str(receipt["measured_compute_cost_usd"]))
-        header_cost = Decimal(response.headers["x-image-compute-cost-usd"])
     except InvalidOperation as error:
         raise ApiError("image-to-image receipt contains an invalid number") from error
     expected_receipt = {
@@ -117,16 +109,7 @@ def verified_image(
         metadata["height"],
     ) != ("image/png", payload["width"], payload["height"]):
         raise ApiError("image-to-image output does not match the requested controls")
-    if not cost.is_finite() or cost < 0 or header_cost != cost:
-        raise ApiError("image-to-image cost header disagrees with the receipt")
-    expected_headers = {
-        "x-image-sha256": metadata["sha256"],
-        "x-image-seed": str(payload["seed"]),
-        "x-image-model": receipt["model_id"],
-        "x-image-model-revision": receipt["model_revision"],
-    }
-    if any(response.headers[key] != value for key, value in expected_headers.items()):
-        raise ApiError("image-to-image headers disagree with the receipt")
+    cost = verify_image_headers(response, receipt, metadata["sha256"], payload["seed"])
     return GeneratedImage(
         raw,
         "image/png",
