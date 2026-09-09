@@ -10,15 +10,15 @@ See [`docs/auth-contract.md`](docs/auth-contract.md).
 
 ## Parallel CLI implementations
 
-`image` currently delegates to `image1`. `image4` is the parallel Native API V4 implementation;
+`image` delegates to `image4`. `image1` retains the former Native API V1 implementation;
 its product API calls use the accepted r8 contract. Authentication and API-independent local
 program builders are shared internally. The default binding is fixed by the package.
 
 All 49 current CLI commands have functional coverage in `image4`. See the
 [functional coverage matrix](docs/design/cli-v4-functional-coverage.v19.md) and
 [completion evidence](docs/reviews/2026-09-09-cli-v4-functional-implementation-complete.md).
-Recent validation is limited to focused impact tests. Overall cutover validation, the default
-binding change, and release remain pending. The examples below use the current `image` default.
+The cutover candidate passed the complete local test suite, repository static checks, built-wheel
+entrypoint checks, and authenticated public V4 smoke tests. Release remains a separate action.
 
 ## Development
 
