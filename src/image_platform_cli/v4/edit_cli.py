@@ -12,6 +12,7 @@ from ..common.errors import CliError
 from ..common.files import read_image, save_bytes_exclusive
 from ..common.service import AuthService
 from .api import V4ApiClient
+from .color_matching import ColorMatchOptions
 from .crop import crop_program
 from .filtering import filter_program
 from .grayscale import grayscale_program
@@ -53,7 +54,16 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     text.add_argument("--fill", type=coordinates(4), required=True)
     text.add_argument("--stroke", type=coordinates(4))
     text.add_argument("--stroke-width", type=int, default=0)
-    for operation in (crop, grayscale, filtering, shape, text):
+    color_match = raster.add_parser("color-match")
+    color_match.add_argument("--reference", type=Path, required=True)
+    color_match.add_argument(
+        "--algorithm",
+        choices=("lab_mean_std_v1", "lab_histogram_256_v1"),
+        default="lab_mean_std_v1",
+    )
+    color_match.add_argument("--strength", type=Decimal, default=Decimal(1))
+    color_match.add_argument("--preserve-luminance", action="store_true")
+    for operation in (crop, grayscale, filtering, shape, text, color_match):
         operation.add_argument("--input", type=Path, required=True)
         operation.add_argument("--output", "-o", type=Path)
         operation.add_argument("--dry-run", action="store_true")
@@ -93,7 +103,14 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
-        if args.raster_command == "text":
+        if args.raster_command == "color-match":
+            raster_result = api.color_match(
+                token,
+                input_path=args.input,
+                reference_path=args.reference,
+                options=color_match_options(args),
+            )
+        elif args.raster_command == "text":
             raster_result = api.draw_text(token, input_path=args.input, options=text_options(args))
         elif args.raster_command == "shape":
             raster_result = api.draw_shape(
@@ -181,6 +198,8 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
+    if args.raster_command == "color-match":
+        return color_match_options(args).program()
     if args.raster_command == "text":
         return text_options(args).program()
     if args.raster_command == "shape":
@@ -207,3 +226,7 @@ def text_options(args: argparse.Namespace) -> TextOptions:
         args.stroke,
         args.stroke_width,
     )
+
+
+def color_match_options(args: argparse.Namespace) -> ColorMatchOptions:
+    return ColorMatchOptions(args.algorithm, args.strength, args.preserve_luminance)

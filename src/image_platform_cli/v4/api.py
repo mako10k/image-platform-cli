@@ -32,6 +32,7 @@ from ..common.models import (
     SegmentationResult,
 )
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
+from .color_matching import ColorMatchOptions
 from .conversion import prepare_conversion
 from .crop import crop_program
 from .filtering import filter_program
@@ -102,6 +103,21 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def color_match(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        reference_path: Path,
+        options: ColorMatchOptions,
+    ) -> DeterministicEditResult:
+        payload, source = prepare_single_edit(
+            input_path, options.program(), extra_inputs={"reference": reference_path}
+        )
+        return self._single_image_operation(
+            access_token, payload, source, (source["width"], source["height"])
+        )
 
     def draw_text(
         self, access_token: str, *, input_path: Path, options: TextOptions
