@@ -33,6 +33,7 @@ from ..common.models import (
 )
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
 from .color_matching import ColorMatchOptions
+from .compositing import CompositeOptions
 from .conversion import prepare_conversion
 from .crop import crop_program
 from .filtering import filter_program
@@ -104,6 +105,26 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def composite_image(
+        self,
+        access_token: str,
+        *,
+        background_path: Path,
+        overlay_path: Path,
+        mask_path: Path | None,
+        options: CompositeOptions,
+    ) -> DeterministicEditResult:
+        extras = {"overlay": overlay_path}
+        if mask_path is not None:
+            extras["mask"] = mask_path
+        payload, source = prepare_single_edit(
+            background_path, options.program(masked=mask_path is not None), extra_inputs=extras
+        )
+        output_size = (
+            (source["width"], source["height"]) if options.crop is None else options.crop[2:]
+        )
+        return self._single_image_operation(access_token, payload, source, output_size)
 
     def project_quad(
         self, access_token: str, *, input_path: Path, texture_path: Path, options: QuadOptions

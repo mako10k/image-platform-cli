@@ -13,6 +13,7 @@ from ..common.files import read_image, save_bytes_exclusive
 from ..common.service import AuthService
 from .api import V4ApiClient
 from .color_matching import ColorMatchOptions
+from .compositing import CompositeOptions
 from .crop import crop_program
 from .filtering import filter_program
 from .grayscale import grayscale_program
@@ -25,6 +26,19 @@ from .text_drawing import TextOptions
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
+    composite = commands.add_parser("composite")
+    for name in ("background", "overlay"):
+        composite.add_argument(f"--{name}", type=Path, required=True)
+    composite.add_argument("--mask", type=Path)
+    composite.add_argument("--output", "-o", type=Path, required=True)
+    composite.add_argument("--matrix", type=matrix_values, default=CompositeOptions().matrix)
+    composite.add_argument("--opacity", type=Decimal, default=Decimal(1))
+    composite.add_argument(
+        "--composite",
+        choices=("source_over", "replace", "multiply", "screen"),
+        default="source_over",
+    )
+    composite.add_argument("--crop", type=coordinates(4))
     convert = commands.add_parser("convert")
     convert.add_argument("--input", type=Path, required=True)
     convert.add_argument("--output", "-o", type=Path, required=True)
@@ -110,6 +124,17 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
+    if args.command == "composite":
+        composited = api.composite_image(
+            service.access_token(frozenset({"images:edit"})),
+            background_path=args.background,
+            overlay_path=args.overlay,
+            mask_path=args.mask,
+            options=CompositeOptions(args.matrix, args.opacity, args.composite, args.crop),
+        )
+        save_bytes_exclusive(composited.data, args.output)
+        print(f"Saved {composited.width}x{composited.height} composite to {args.output}.")
+        return
     if args.command == "raster":
         token = service.access_token(frozenset({"images:edit"}))
         if args.raster_command == "project-quad":
@@ -248,3 +273,13 @@ def text_options(args: argparse.Namespace) -> TextOptions:
 
 def color_match_options(args: argparse.Namespace) -> ColorMatchOptions:
     return ColorMatchOptions(args.algorithm, args.strength, args.preserve_luminance)
+
+
+def matrix_values(value: str) -> tuple[Decimal, ...]:
+    try:
+        result = tuple(Decimal(part) for part in value.split(","))
+    except ArithmeticError as error:
+        raise argparse.ArgumentTypeError("matrix requires comma-separated decimals") from error
+    if len(result) != 6:
+        raise argparse.ArgumentTypeError("matrix requires six values")
+    return result
