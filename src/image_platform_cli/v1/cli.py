@@ -20,6 +20,7 @@ from ..common.raster_programs import (
     _raster_commands,
     _raster_input_paths,
 )
+from ..common.replacements import add_replacement_commands, replacement_program
 from ..common.segmentation import save_segmentation_outputs
 from ..common.service import AuthService
 from ..common.tokens import TokenValidator
@@ -315,23 +316,7 @@ def parser() -> argparse.ArgumentParser:
     verify_program.add_argument("--program", type=Path, required=True)
     verify_program.add_argument("--input", action="append", default=[], metavar="NAME=PATH")
     verify_program.add_argument("--mask", action="append", default=[], metavar="NAME=PATH")
-    for name in ("replace-object", "replace-background"):
-        replacement = edit_commands.add_parser(name)
-        replacement.add_argument("--base", type=Path, required=True)
-        replacement.add_argument("--replacement", type=Path, required=True)
-        replacement.add_argument("--mask", type=Path, action="append", required=True)
-        replacement.add_argument(
-            "--combine", choices=("union", "intersection", "subtract"), default="union"
-        )
-        replacement.add_argument("--threshold", type=Decimal)
-        replacement.add_argument("--invert", action="store_true")
-        morphology = replacement.add_mutually_exclusive_group()
-        morphology.add_argument("--dilate", type=int)
-        morphology.add_argument("--erode", type=int)
-        replacement.add_argument("--padding", type=int, help="alias for mask dilation")
-        replacement.add_argument("--feather", type=Decimal)
-        replacement.add_argument("--output", "-o", type=Path)
-        replacement.add_argument("--dry-run", action="store_true")
+    add_replacement_commands(edit_commands)
     raster = edit_commands.add_parser("raster")
     raster_commands = raster.add_subparsers(dest="raster_command", required=True)
     raster_crop = raster_commands.add_parser("crop")
@@ -958,44 +943,7 @@ def _run_replacement(
     service: AuthService | None,
     api: ImageApiClient | None,
 ) -> None:
-    background = args.command == "replace-background"
-    _validate_replacement_controls(args)
-    if background and len(args.mask) != 1:
-        raise CliError("replace-background currently requires exactly one foreground mask")
-    if args.padding is not None and (args.dilate is not None or args.erode is not None):
-        raise CliError("--padding cannot be combined with --dilate or --erode")
-    transforms: list[dict[str, object]] = []
-    if args.threshold is not None:
-        transforms.append({"op": "threshold", "cutoff": str(args.threshold)})
-    radius = args.padding if args.padding is not None else args.dilate
-    if radius is not None:
-        transforms.append({"op": "dilate", "radius": radius, "shape": "disk"})
-    if args.erode is not None:
-        transforms.append({"op": "erode", "radius": args.erode, "shape": "disk"})
-    if background or args.invert:
-        transforms.append({"op": "invert"})
-    if args.feather is not None:
-        transforms.append({"op": "feather", "radius": str(args.feather), "border": "transparent"})
-    coverage = _replacement_coverage(args.mask, args.combine, transforms)
-    program = {
-        "revision": "deterministic-edit-v1",
-        "inputs": {
-            "base": "image",
-            "replacement": "image",
-            **{f"mask{index}": "mask" for index in range(len(args.mask))},
-        },
-        "source_input": "base",
-        "commands": [
-            {
-                "id": "replace-background" if background else "replace-object",
-                "op": "paste_image",
-                "input": "replacement",
-                "composite": "replace",
-                "coverage": coverage,
-            }
-        ],
-        "encoding": {"format": "png"},
-    }
+    program = replacement_program(args)
     if args.dry_run:
         print(json.dumps(program, sort_keys=True, separators=(",", ":")))
         return
@@ -1012,34 +960,6 @@ def _run_replacement(
     )
     save_deterministic_edit(result, args.output)
     _print_deterministic_result(result, args.output)
-
-
-def _replacement_coverage(
-    masks: Sequence[Path], combine: str, transforms: list[dict[str, object]]
-) -> dict[str, object]:
-    def layer(index: int) -> dict[str, object]:
-        return {
-            "source": {"kind": "mask_input", "input": f"mask{index}"},
-            "transforms": transforms,
-        }
-
-    return {
-        "base": layer(0),
-        "combine": [{"mode": combine, "layer": layer(index)} for index in range(1, len(masks))],
-    }
-
-
-def _validate_replacement_controls(args: argparse.Namespace) -> None:
-    if args.command == "replace-background" and args.invert:
-        raise CliError("replace-background already inverts its foreground mask")
-    if args.threshold is not None and not Decimal(0) <= args.threshold <= Decimal(1):
-        raise CliError("--threshold must be from 0 through 1")
-    for name in ("dilate", "erode", "padding"):
-        value = getattr(args, name)
-        if value is not None and not 1 <= value <= 64:
-            raise CliError(f"--{name} must be from 1 through 64")
-    if args.feather is not None and not Decimal(0) < args.feather <= Decimal(64):
-        raise CliError("--feather must be greater than 0 and at most 64")
 
 
 def _run_raster(
