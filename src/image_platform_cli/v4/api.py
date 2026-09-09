@@ -25,8 +25,14 @@ from ..common.inputs import (
     require_one_image_source,
     validate_caption_controls,
 )
-from ..common.models import GeneratedImage, PortraitMattingResult, SegmentationResult
+from ..common.models import (
+    DeterministicEditResult,
+    GeneratedImage,
+    PortraitMattingResult,
+    SegmentationResult,
+)
 from .campaigns import IDENTITY_KEYS, TERMINAL, integer, number, rubric, validate_campaign
+from .conversion import prepare_conversion, verify_conversion
 from .image_edits import ImageToImageOptions, verified_image
 from .inpaint import prepare_inpaint, verify_inpaint
 from .matting import prepare_matting, verify_matting
@@ -90,6 +96,19 @@ class V4ApiClient:
         self._sleep = sleeper
         self._clock = clock
         self._polling_timeout_seconds = polling_timeout_seconds
+
+    def convert_image(
+        self, access_token: str, *, input_path: Path, format_name: str, quality: int = 90
+    ) -> DeterministicEditResult:
+        payload, source = prepare_conversion(input_path, format_name, quality)
+        response, envelope = self._exchange(
+            "POST", "/v4/image-operations", access_token, json=payload
+        )
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        return verify_conversion(
+            response, self._object(envelope["data"]), payload["program"], source
+        )
 
     def portrait_matting(
         self,

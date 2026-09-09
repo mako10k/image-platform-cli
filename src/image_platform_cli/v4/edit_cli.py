@@ -17,6 +17,11 @@ from .segment_cli import add_segment_command, run_segment
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
+    convert = commands.add_parser("convert")
+    convert.add_argument("--input", type=Path, required=True)
+    convert.add_argument("--output", "-o", type=Path, required=True)
+    convert.add_argument("--format", choices=("png", "jpeg", "webp"), required=True)
+    convert.add_argument("--quality", type=int, default=90)
     add_segment_command(commands)
     matte = commands.add_parser("matte-portrait")
     matte.add_argument("--input", type=Path, required=True)
@@ -51,6 +56,16 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
+    if args.command == "convert":
+        converted = api.convert_image(
+            service.access_token(frozenset({"images:edit"})),
+            input_path=args.input,
+            format_name=args.format,
+            quality=args.quality,
+        )
+        save_bytes_exclusive(converted.data, args.output)
+        print(f"Saved {converted.width}x{converted.height} converted image to {args.output}.")
+        return
     if args.command == "matte-portrait":
         matte = api.portrait_matting(
             service.access_token(frozenset({"images:edit"})),
