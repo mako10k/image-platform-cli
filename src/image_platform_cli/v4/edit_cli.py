@@ -12,7 +12,7 @@ from ..common.files import read_image, save_bytes_exclusive
 from ..common.service import AuthService
 from .api import V4ApiClient
 from .image_edits import ImageToImageOptions
-from .segment_cli import add_segment_command, run_segment
+from .segment_cli import add_segment_command, coordinates, run_segment
 
 
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -22,6 +22,12 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     convert.add_argument("--output", "-o", type=Path, required=True)
     convert.add_argument("--format", choices=("png", "jpeg", "webp"), required=True)
     convert.add_argument("--quality", type=int, default=90)
+    raster = commands.add_parser("raster").add_subparsers(dest="raster_command", required=True)
+    crop = raster.add_parser("crop")
+    crop.add_argument("--input", type=Path, required=True)
+    crop.add_argument("--output", "-o", type=Path)
+    crop.add_argument("--rect", type=coordinates(4), required=True)
+    crop.add_argument("--dry-run", action="store_true")
     add_segment_command(commands)
     matte = commands.add_parser("matte-portrait")
     matte.add_argument("--input", type=Path, required=True)
@@ -56,6 +62,13 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
+    if args.command == "raster":
+        cropped = api.crop_image(
+            service.access_token(frozenset({"images:edit"})), input_path=args.input, rect=args.rect
+        )
+        save_bytes_exclusive(cropped.data, args.output)
+        print(f"Saved {cropped.width}x{cropped.height} cropped image to {args.output}.")
+        return
     if args.command == "convert":
         converted = api.convert_image(
             service.access_token(frozenset({"images:edit"})),
