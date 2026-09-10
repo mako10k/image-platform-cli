@@ -18,6 +18,7 @@ from ..common.service import AuthService
 from ..common.tokens import TokenValidator
 from .api import QueryScalar, V4ApiClient
 from .edit_cli import add_edit_commands, raster_program, run_edit
+from .help_navigation import show_help
 from .program_cli import prepare_cli_program
 from .segment_cli import validate_segment_outputs
 
@@ -276,22 +277,7 @@ def _announce(user_code: str, verification_uri_complete: str) -> None:
 
 
 def _show_help(topic: Sequence[str]) -> int:
-    selected = parser()
-    for name in topic:
-        choices = next(
-            (
-                action.choices
-                for action in selected._actions
-                if isinstance(action, argparse._SubParsersAction)
-            ),
-            {},
-        )
-        if name not in choices:
-            print(f"error: unknown help topic {' '.join(topic)}", file=sys.stderr)
-            return 2
-        selected = choices[name]
-    print(selected.format_help().rstrip())
-    return 0
+    return show_help(parser(), topic)
 
 
 def _summary(group: str, result: dict[str, object]) -> str:

@@ -2,19 +2,20 @@
 
 Independent command-line client for the image platform.
 
-The repository contains the accepted authentication contract and a locally tested initial
-authentication CLI. No WorkOS setting change, invitation, live request, or credential has been
-created here.
+The default client uses Native API V4 and the accepted public OAuth authentication flow.
+Local validation and authenticated Staging smoke evidence are recorded under `docs/reviews/`.
 
 See [`docs/auth-contract.md`](docs/auth-contract.md).
 
 ## Parallel CLI implementations
 
-`image` delegates to `image4`. `image1` retains the former Native API V1 implementation;
-its product API calls use the accepted r8 contract. Authentication and API-independent local
+`image` delegates to `image4`. `image1` retains the former Native API V1 implementation.
+`image` and `image4` product API calls use the accepted V4 r8 contract. Authentication and API-independent local
 program builders are shared internally. The default binding is fixed by the package.
 
-All 49 current CLI commands have functional coverage in `image4`. See the
+The earlier accepted 49-command baseline has functional coverage in `image4`. The current parser
+has 50 product-command leaves, plus `help` and the `i2i` alias (52 leaf paths); all 60 help paths,
+including groups and the root, are checked offline. See the
 [functional coverage matrix](docs/design/cli-v4-functional-coverage.v19.md) and
 [completion evidence](docs/reviews/2026-09-09-cli-v4-functional-implementation-complete.md).
 The cutover candidate passed the complete local test suite, repository static checks, built-wheel
@@ -29,7 +30,8 @@ uv run mypy
 uv run pytest -q
 ```
 
-The initial command surface is:
+Start with these commands; `image help` lists all groups and `image help GROUP [COMMAND]`
+shows their options and examples:
 
 ```text
 image auth login [--scope SCOPE]...
@@ -41,22 +43,25 @@ image prompt optimize "a blue ceramic cup" [--width 1024] [--height 1024] [--see
 ```
 
 `login` performs the WorkOS Device Authorization Flow. It will fail closed when the platform has
-no usable OS credential-store backend. Its default application scopes are `images:generate`,
-`campaigns:read`, `artifacts:read`, and `batches:plan`.
+no usable OS credential-store backend. V4 defaults cover fourteen application scopes:
+`images:generate`, `images:edit`, `images:understand`, `batches:plan`, `batches:execute`,
+`campaigns:read`, `campaigns:write`, `jobs:submit`, `jobs:read`, `jobs:cancel`,
+`artifacts:read`, `artifacts:write`, `artifacts:access`, and `artifacts:delete`.
+Repeat `--scope` to select an explicit subset for login.
 
-`prompt optimize` sends only the user's query and optional bounded dimensions to the native
-`POST /v1/prompt-plans` endpoint and prints only the optimized prompt. The server owns the planning
-prompt, output schema, validation, and the replaceable provider call to `POST /v1/chat/completions`;
-the CLI never calls that provider-compatible endpoint directly. `--seed N` makes both prompt
-variation and a later generation with the same seed reproducible; omitting it selects a fresh
-random seed while keeping stdout limited to the optimized prompt.
+`prompt optimize` submits the query, optional dimensions and effective seed to
+`POST /v4/prompt-plans`. It prints the optimized prompt by default, or the validated plan with
+`--json`. The server owns prompt planning; the CLI does not call provider-compatible routes.
+An explicit seed is preserved; otherwise the CLI chooses a random seed in `0..2^63-1`.
+A seed alone is not a cross-model or cross-revision reproducibility guarantee.
 
 `generate` refreshes the session, validates the new access token, and submits one idempotent native
 generation Job. It waits up to 30 seconds by default, automatically polls any HTTP 202 response,
 retrieves the completed Artifact through its short-lived signed URL, verifies its SHA-256, byte
 count, MIME type, and PNG dimensions, then creates the output without overwriting an existing file.
-When `--seed N` is omitted, the CLI selects a fresh random non-zero 63-bit seed for that Job and
-prints the effective seed with the result. An explicitly supplied seed, including zero, is preserved.
+When `--seed N` is omitted, the CLI selects a random seed in `0..2^63-1`. An explicitly supplied
+seed, including zero, is preserved. The V4 command prints saved dimensions and the output path;
+it does not print the seed. Specify `--seed` when you need to retain it for a later comparison.
 The OAuth token is sent only to the configured API origin and never to the signed Artifact URL.
 `--wait 0` begins polling immediately. Waits from 61 through 120 seconds additionally require
 `--allow-long-wait`; the CLI intentionally has no option that disables polling. Live login and
@@ -69,28 +74,40 @@ prompt describes the desired final image; it is not an instruction such as “re
 Instruction editing is a separate platform capability backed by the `edit-flux2-klein-4b` profile.
 The I2I command keeps its existing strength `0.75`, guidance `7.5`, and 25-step defaults.
 
-Synchronous I2I and explicit-mask inpaint print the verified output SHA-256, effective seed,
-backend model and revision, and the server-provided measured compute cost. This cost is a measured
-estimate from the platform receipt, not a finalized cloud invoice. Inpaint retains the current
+Staging's I2I adapter now executes typed VAE Encode → latent denoise → Decode internally via
+`/v4/image-edits`. Use the existing I2I command; there are no standalone VAE-stage commands,
+optimizer switches or new in-VAE operations in this CLI. This extraction does not claim a
+speed or image-quality improvement. A light composition-preserving example is:
+
+```bash
+image edit image-to-image "watercolor coastal cottage" --input sketch.png -o watercolor.png \
+  --width 256 --height 256 --steps 10 --strength 0.6 --guidance-scale 7.5 --seed 17
+```
+
+
+Synchronous V4 I2I and explicit-mask inpaint validate their response receipts before saving,
+then print dimensions and the output path. They do not print the full receipt, model revision,
+seed or compute cost. The legacy `image1` output format differs. Inpaint retains the current
 contract: white mask pixels are repainted, black pixels are preserved, and `grow_mask=0`.
 
 Inpaint also accepts `--safety-filter default|enabled|disabled`. Non-default modes succeed only
-when the authenticated server explicitly permits per-request control. The CLI verifies and prints
-the server-reported requested mode, effective mode, and outcome so equal-seed smoke comparisons can
-be measured. Servers remain filter-on and control-denied by default.
+when the authenticated server explicitly permits per-request control. The V4 CLI validates the requested and effective safety modes and outcome in the response;
+it does not print these fields. Servers remain filter-on and control-denied by default.
 
 `image edit run --program edit.json --input scene=scene.png --mask selection=mask.png -o
 result.png` executes the platform's complete `deterministic-edit-v1` contract. Bindings must exactly
 match the program's named image and mask inputs. The CLI verifies the output, input, command order,
 program, normalized-command, and per-command pixel hashes before writing the PNG. `--dry-run`
-validates bindings and emits stable compact JSON without authentication or an API request; omit
+validates bindings and emits stable, sorted JSON without authentication or an API request; omit
 `--output` in that mode.
 
 ## Help and quality gates
 
 `image help` prints the command catalog. Continue with `image help edit` or
 `image help edit run` to navigate into a group or command; detailed topics include guidance,
-copyable examples, child topics, and a related parent topic.
+copyable examples, child topics, and a related parent topic. Replace example paths, IDs and font
+digests with real values. Help is offline; commands in examples may perform API operations when run.
+The catalog reflects CLI support, while `image capabilities --json` reports server availability.
 
 `image edit replace-object` and `image edit replace-background` compile common replacement
 workflows into the same deterministic program contract. They support thresholding, disk dilation
