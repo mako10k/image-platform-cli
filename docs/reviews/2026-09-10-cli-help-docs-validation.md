@@ -29,4 +29,15 @@ source tree. The scoped correction starts there on `codex/cli-help-docs`.
 - No new inference, authentication, deployment, release, requirement change or PERT advance.
 - Reasoning audit `tmp-cli-help-closeout`: zero fatal/error/warning findings.
 
-The package and local installation readback are recorded below after verification.
+## Built wheel and local installation
+
+Implementation commit `e618b0a` produced a wheel with SHA-256
+`e346bc77718a4b2b3dcb3094c45ba167ea1ccf02d0cb55543be23229ecb73d88`.
+It replaced the existing local uv tool installation while retaining all 24 dependency versions.
+From outside the checkout, the actual installed `image` executable successfully traversed all
+60 help paths. Installed `image` and `image4` top-level help matched, `image4 help edit i2i`
+showed typed-VAE guidance, and `image1 --help` remained callable. Installed dispatcher, V4 CLI
+and help-module bytes match the source commit.
+
+Readback: [installed package evidence](evidence/2026-09-10-installed-help.json).
+No live authentication or GPU inference was used for this package verification.
