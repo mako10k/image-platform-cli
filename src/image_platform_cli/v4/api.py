@@ -40,6 +40,7 @@ from .enhancements import EnhancedImage, prepare_enhancement, verify_enhancement
 from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions, verified_image
+from .image_results import decode_output
 from .inpaint import prepare_inpaint, verify_inpaint
 from .matting import prepare_matting, verify_matting
 from .program_execution import prepare_program, verify_program
@@ -120,6 +121,40 @@ class V4ApiClient:
         if not response.is_success:
             raise ApiError(_safe_error(envelope))
         return verify_program(response, self._object(envelope["data"]), normalized, inputs)
+
+    def plan_image_operations(
+        self, access_token: str, *, request: dict[str, Any]
+    ) -> dict[str, Any]:
+        response, envelope = self._exchange(
+            "POST", "/v4/image-operation-plans", access_token, json=request
+        )
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        data = self._object(envelope["data"])
+        receipt = self._object(data["receipt"])
+        if (
+            response.headers["x-image-logical-program-sha256"] != receipt["logical_program_sha256"]
+            or response.headers["x-image-physical-graph-sha256"] != receipt["physical_graph_sha256"]
+        ):
+            raise ApiError("image planning headers disagree with the receipt")
+        return data
+
+    def run_image_operation_batch(
+        self, access_token: str, *, request: dict[str, Any]
+    ) -> dict[str, Any]:
+        response, envelope = self._exchange(
+            "POST", "/v4/image-operation-batches", access_token, json=request
+        )
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        data = self._object(envelope["data"])
+        receipt = self._object(data["receipt"])
+        if response.headers["x-image-batch-sha256"] != receipt["batch_sha256"]:
+            raise ApiError("image batch header disagrees with the receipt")
+        for item in data["items"]:
+            if item["status"] == "succeeded":
+                decode_output(item)
+        return data
 
     def geometry_image(
         self, access_token: str, *, input_path: Path, program: dict[str, Any]

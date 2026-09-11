@@ -156,6 +156,8 @@ def _prepare_output(args: argparse.Namespace) -> bool:
         "verify",
         "replace-object",
         "replace-background",
+        "plan",
+        "batch",
     }:
         require_available_output(args.output)
     return False

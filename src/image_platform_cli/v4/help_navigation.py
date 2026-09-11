@@ -65,6 +65,14 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Execute a deterministic program twice and compare output and receipt evidence.",
         "edit verify --program edit.json --input scene=scene.png",
     ),
+    "edit plan": (
+        "Compile a bounded deterministic edit request into a physical V4 Pipeline.",
+        "edit plan --request edit-plan-request.json",
+    ),
+    "edit batch": (
+        "Execute a bounded synchronous batch of independent deterministic edit requests.",
+        "edit batch --request edit-batch-request.json",
+    ),
     "edit replace-object": (
         "Replace mask coverage while preserving pixels outside it.",
         "edit replace-object --base scene.png --replacement new.png --mask object.png --dry-run",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import secrets
 from decimal import Decimal
 from pathlib import Path
@@ -33,6 +34,9 @@ from .text_drawing import TextOptions
 def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = groups.add_parser("edit").add_subparsers(dest="command", required=True)
     add_program_commands(commands)
+    for name in ("plan", "batch"):
+        contract_command = commands.add_parser(name)
+        contract_command.add_argument("--request", type=Path, required=True)
     add_replacement_commands(commands)
     composite = commands.add_parser("composite")
     for name in ("background", "overlay"):
@@ -185,6 +189,16 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
     if args.command in {"run", "verify", "replace-object", "replace-background"}:
         run_cli_program(args, service, api)
+        return
+    if args.command in {"plan", "batch"}:
+        request = load_json_object(args.request)
+        token = service.access_token(frozenset({"images:edit"}))
+        result = (
+            api.plan_image_operations(token, request=request)
+            if args.command == "plan"
+            else api.run_image_operation_batch(token, request=request)
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
         return
     if args.command == "composite":
         composited = api.composite_image(
@@ -388,3 +402,13 @@ def matrix_values(value: str) -> tuple[Decimal, ...]:
     if len(result) != 6:
         raise argparse.ArgumentTypeError("matrix requires six values")
     return result
+
+
+def load_json_object(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CliError(f"could not read JSON request: {path}") from error
+    if not isinstance(value, dict):
+        raise CliError("request file must contain one JSON object")
+    return value
