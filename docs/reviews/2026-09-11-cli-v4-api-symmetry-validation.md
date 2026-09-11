@@ -40,9 +40,10 @@ VAE Encode、latent denoise、Decodeは`POST /v4/image-edits`内部の物理処�
 - CLI完全テスト: `uv run pytest -q`、635 passed
 - CLI標準static checks: `./scripts/static-checks.sh`、Ruff、format、strict mypy、Xenon、Pylint passed
 - help navigation: rootとgroupを含む66 path、および全exampleのparseを完全テスト内で検証
-- guided Job help: 5件のhelp-only topic、完全なControlNet/IP-Adapter Job JSON、エラーからの
-  recovery導線をfocused 154 testsとAPI request parserで検証
+- guided Job help: 5件のhelp-only topic、完全なControlNet/IP-Adapter Job JSON、標準`--help`
+  とエラーからのrecovery導線をfocused 158 testsとAPI request parserで検証
 - API focused tests: Native V4 route/contract、model-profile projection、VAE plan、execution、types、specialized provider passed
 
-この記録はローカル実装の検証である。Modalまたはpublic Stagingへのdeploy、live request、
-package install、release、merge、pushは実施していない。
+CLI packageは作業ブランチからローカル再インストールし、`image`と`image4`でhelp導線を
+読み戻した。Modalまたはpublic Stagingへのdeploy、live request、release、merge、pushは
+実施していない。
