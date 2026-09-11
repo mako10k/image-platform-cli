@@ -484,6 +484,20 @@ class V4ApiClient:
         _validate_job_list(data)
         return data
 
+    def submit_job(self, access_token: str, *, request: dict[str, Any]) -> dict[str, Any]:
+        response, envelope = self._exchange(
+            "POST",
+            "/v4/jobs",
+            access_token,
+            headers={"Idempotency-Key": secrets.token_hex(16)},
+            json=request,
+        )
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        data = self._object(envelope["data"])
+        _validate_job_accepted(data)
+        return data
+
     def search(
         self,
         access_token: str,
@@ -895,6 +909,20 @@ class V4ApiClient:
     def get_campaign(self, access_token: str, campaign_id: str) -> dict[str, Any]:
         return self._campaign_request("GET", access_token, campaign_id)
 
+    def list_campaigns(
+        self,
+        access_token: str,
+        *,
+        params: list[tuple[str, QueryScalar]] | tuple[tuple[str, QueryScalar], ...] = (),
+    ) -> dict[str, Any]:
+        result = self._object(self._request("GET", "/v4/campaigns", access_token, params=params))
+        items = result.get("data")
+        if not isinstance(items, list):
+            raise ApiError("image API returned malformed Campaign collection")
+        for item in items:
+            validate_campaign(self._object(item))
+        return result
+
     def cancel_campaign(self, access_token: str, campaign_id: str) -> dict[str, Any]:
         return self._campaign_request("POST", access_token, campaign_id, suffix="/cancel")
 
@@ -1181,6 +1209,26 @@ def _validate_job_list(data: dict[str, Any]) -> None:
             if not isinstance(output, dict):
                 raise ApiError("image API returned malformed Job collection")
             _validate_artifact_descriptor(output)
+
+
+def _validate_job_accepted(data: dict[str, Any]) -> None:
+    if set(data) != {
+        "job_id",
+        "status",
+        "estimated_cost_usd",
+        "submitted_at",
+        "graph_sha256",
+    }:
+        raise ApiError("image API returned malformed Job acceptance")
+    graph = data.get("graph_sha256")
+    if (
+        not _matches(data.get("job_id"), JOB_ID)
+        or data.get("status") not in {"accepted", "queued"}
+        or not _nonnegative_decimal(data.get("estimated_cost_usd"))
+        or not _timestamp(data.get("submitted_at"))
+        or (graph is not None and not _matches(graph, SHA256))
+    ):
+        raise ApiError("image API returned malformed Job acceptance")
 
 
 def _validate_job(data: dict[str, Any]) -> None:

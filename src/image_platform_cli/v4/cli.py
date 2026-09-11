@@ -17,7 +17,7 @@ from ..common.oauth import DeviceFlowClient
 from ..common.service import AuthService
 from ..common.tokens import TokenValidator
 from .api import QueryScalar, V4ApiClient
-from .edit_cli import add_edit_commands, raster_program, run_edit
+from .edit_cli import add_edit_commands, load_json_object, raster_program, run_edit
 from .help_navigation import show_help
 from .program_cli import prepare_cli_program
 from .segment_cli import validate_segment_outputs
@@ -72,6 +72,8 @@ def parser() -> argparse.ArgumentParser:
     job_list.add_argument("--status", action="append", default=[])
     job_list.add_argument("--operation", action="append", default=[])
     _add_page_arguments(job_list)
+    job_submit = jobs.add_parser("submit")
+    job_submit.add_argument("--request", type=Path, required=True)
     for command in ("show", "cancel", "previews"):
         selected = jobs.add_parser(command)
         selected.add_argument("job_id")
@@ -132,6 +134,9 @@ def parser() -> argparse.ArgumentParser:
             batch_command.add_argument("--max-rounds", type=int, default=3)
     for action in ("status", "evaluate", "results", "cancel"):
         batches.add_parser(action).add_argument("campaign_id")
+    batch_list = batches.add_parser("list")
+    batch_list.add_argument("--cursor")
+    batch_list.add_argument("--limit", type=int, default=20)
     return root
 
 
@@ -310,7 +315,12 @@ def _page_params(
 
 
 def _run_job(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
-    if args.command == "cancel":
+    if args.command == "submit":
+        result = api.submit_job(
+            service.access_token(frozenset({"jobs:submit"})),
+            request=load_json_object(args.request),
+        )
+    elif args.command == "cancel":
         result = api.cancel_job(service.access_token(frozenset({"jobs:cancel"})), args.job_id)
     else:
         token = service.access_token(frozenset({"jobs:read"}))
@@ -358,7 +368,12 @@ def _emit(result: object) -> None:
 
 def _run_batch(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
     read_scopes = {"batches:execute", "campaigns:read", "jobs:cancel"}
-    if args.command == "plan":
+    if args.command == "list":
+        params: list[tuple[str, QueryScalar]] = [("limit", args.limit)]
+        if args.cursor is not None:
+            params.insert(0, ("cursor", args.cursor))
+        result = api.list_campaigns(service.access_token(frozenset(read_scopes)), params=params)
+    elif args.command == "plan":
         result = api.create_batch_plan(
             service.access_token(frozenset({"batches:plan"})),
             intent=args.intent,

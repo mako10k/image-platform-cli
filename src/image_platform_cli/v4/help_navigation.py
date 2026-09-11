@@ -154,6 +154,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "List jobs with repeatable status and operation filters.",
         "job list --status running --limit 10",
     ),
+    "job submit": (
+        "Submit a complete Native API V4 Pipeline request with durable Job policy.",
+        "job submit --request job-request.json",
+    ),
     "job show": ("Show one job's current state.", "job show JOB_ID"),
     "job cancel": ("Request cancellation of one job.", "job cancel JOB_ID"),
     "job previews": ("List preview outputs for a job.", "job previews JOB_ID"),
@@ -216,6 +220,7 @@ TOPICS: dict[str, tuple[str, str]] = {
         "batch results CAMPAIGN_ID",
     ),
     "batch cancel": ("Request cancellation of a campaign.", "batch cancel CAMPAIGN_ID"),
+    "batch list": ("List campaigns using cursor pagination.", "batch list --limit 10"),
 }
 
 

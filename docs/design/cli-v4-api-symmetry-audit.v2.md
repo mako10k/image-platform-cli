@@ -37,7 +37,7 @@ route数を一致させる要求ではない。
 | 10 | `POST /v4/campaigns/{campaign_id}/cancel` | `image batch cancel` | 直接 | 接続済み |
 | 11 | `POST /v4/campaigns` | `image batch run`、`iterate` | 直接 | 接続済み |
 | 12 | `GET /v4/campaigns/{campaign_id}` | `image batch status`、`evaluate`、`results` | 直接 | 接続済み |
-| 13 | `GET /v4/campaigns` | `image batch list` | 直接 | **未配線** |
+| 13 | `GET /v4/campaigns` | `image batch list` | 直接 | 接続済み |
 | 14 | `GET /v4/capabilities` | `image capabilities` | 直接 | 接続済み |
 | 15 | `POST /v4/captions` | `image caption` | 直接 | 接続済み |
 | 16 | `POST /v4/enhancements` | `image edit upscale`、`restore` | 直接 | 接続済み |
@@ -51,7 +51,7 @@ route数を一致させる要求ではない。
 | 24 | `POST /v4/jobs/{job_id}/previews/{step_id}/{output}/access` | `image job preview-access` | 直接 | 接続済み |
 | 25 | `GET /v4/jobs/{job_id}/previews` | `image job previews` | 直接 | 接続済み |
 | 26 | `POST /v4/jobs/{job_id}/cancel` | `image job cancel` | 直接 | 接続済み |
-| 27 | `POST /v4/jobs` | `image job submit` | 直接 | **未配線** |
+| 27 | `POST /v4/jobs` | `image job submit` | 直接 | 接続済み |
 | 28 | `GET /v4/jobs/{job_id}` | `image job show`ほか | 直接・複合 | 接続済み |
 | 29 | `GET /v4/jobs` | `image job list` | 直接 | 接続済み |
 | 30 | `GET /v4/model-profiles` | `image model-profiles` | 直接 | 接続済み。表示内容の正確性はAPI側で是正対象 |
@@ -59,7 +59,7 @@ route数を一致させる要求ではない。
 | 32 | `POST /v4/prompt-plans` | `image prompt optimize` | 直接 | 接続済み |
 | 33 | `POST /v4/segmentations` | `image edit segment` | 直接 | 接続済み |
 
-現在の集計は、直接または複合で接続済み31件、未配線2件である。
+現在の集計は、直接または複合で接続済み33件、未配線0件である。
 
 ## VAEとSafetyの境界
 
