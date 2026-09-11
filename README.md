@@ -14,7 +14,7 @@ See [`docs/auth-contract.md`](docs/auth-contract.md).
 program builders are shared internally. The default binding is fixed by the package.
 
 The earlier accepted 49-command baseline has functional coverage in `image4`. The current parser
-has 50 product-command leaves, plus `help` and the `i2i` alias (52 leaf paths); all 60 help paths,
+has 56 product-command leaves, plus `help` and the `i2i` alias (58 leaf paths); all 66 help paths,
 including groups and the root, are checked offline. See the
 [functional coverage matrix](docs/design/cli-v4-functional-coverage.v19.md) and
 [completion evidence](docs/reviews/2026-09-09-cli-v4-functional-implementation-complete.md).
@@ -71,7 +71,8 @@ generation remain separately gated.
 
 `image edit image-to-image` (`i2i`) uses descriptive Stable Diffusion 1.5 image-to-image. Its
 prompt describes the desired final image; it is not an instruction such as “remove the person”.
-Instruction editing is a separate platform capability backed by the `edit-flux2-klein-4b` profile.
+Instruction editing is a separate platform-only capability backed by the `edit-flux2-klein-4b`
+profile; it is not callable through the current public V4 image-edit route.
 The I2I command keeps its existing strength `0.75`, guidance `7.5`, and 25-step defaults.
 
 Staging's I2I adapter now executes typed VAE Encode → latent denoise → Decode internally via
@@ -91,8 +92,15 @@ seed or compute cost. The legacy `image1` output format differs. Inpaint retains
 contract: white mask pixels are repainted, black pixels are preserved, and `grow_mask=0`.
 
 Inpaint also accepts `--safety-filter default|enabled|disabled`. Non-default modes succeed only
-when the authenticated server explicitly permits per-request control. The V4 CLI validates the requested and effective safety modes and outcome in the response;
-it does not print these fields. Servers remain filter-on and control-denied by default.
+when the authenticated server explicitly permits per-request control. The V4 CLI validates the
+requested and effective safety modes and outcome in the response; it does not print these fields.
+Development Staging currently composes the Safety Checker out because of excessive false positives;
+the CLI does not add a local checker.
+
+`image edit upscale --input scene.png --width 2048 --height 2048 -o enlarged.png` and
+`image edit restore --input scene.png -o restored.png` call `POST /v4/enhancements`.
+Both use deterministic quality by default; `--quality-tier ai` requests the registered AI profile
+and remains subject to server authorization. Restore always preserves the input dimensions.
 
 `image edit run --program edit.json --input scene=scene.png --mask selection=mask.png -o
 result.png` executes the platform's complete `deterministic-edit-v1` contract. Bindings must exactly
@@ -100,6 +108,15 @@ match the program's named image and mask inputs. The CLI verifies the output, in
 program, normalized-command, and per-command pixel hashes before writing the PNG. `--dry-run`
 validates bindings and emits stable, sorted JSON without authentication or an API request; omit
 `--output` in that mode.
+
+`image edit plan --request edit-plan-request.json` sends a complete bounded planner request and
+prints the verified physical Pipeline and planning receipt. `image edit batch --request
+edit-batch-request.json` sends a complete synchronous batch request and verifies the batch receipt
+and every successful inline image before printing the response.
+
+`image batch list --limit 10` lists Campaigns with cursor pagination. `image job submit --request
+job-request.json` submits a complete durable Pipeline and policy request with an idempotency key;
+the returned accepted Job is validated before it is printed.
 
 ## Help and quality gates
 

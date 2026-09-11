@@ -4,6 +4,7 @@
 - 性質: オーナー指示に基づく実装範囲と進捗の分類表
 - 分母: `src/image_platform_cli/v4/route_contracts.json`に収録された33件の公開method/path契約
 - 完了条件: 各契約が既存または新規CLIから直接または複合処理として到達可能で、helpと契約テストから発見・検証できること
+- 実装状態: 33件すべて配線・検証済み
 
 ## 文書分類
 
@@ -54,7 +55,7 @@ route数を一致させる要求ではない。
 | 27 | `POST /v4/jobs` | `image job submit` | 直接 | 接続済み |
 | 28 | `GET /v4/jobs/{job_id}` | `image job show`ほか | 直接・複合 | 接続済み |
 | 29 | `GET /v4/jobs` | `image job list` | 直接 | 接続済み |
-| 30 | `GET /v4/model-profiles` | `image model-profiles` | 直接 | 接続済み。表示内容の正確性はAPI側で是正対象 |
+| 30 | `GET /v4/model-profiles` | `image model-profiles` | 直接 | 接続済み。API側`b8263e6`でprofile単位の明示route bindingへ是正済み |
 | 31 | `POST /v4/portrait-mattings` | `image edit matte-portrait` | 直接 | 接続済み |
 | 32 | `POST /v4/prompt-plans` | `image prompt optimize` | 直接 | 接続済み |
 | 33 | `POST /v4/segmentations` | `image edit segment` | 直接 | 接続済み |
@@ -77,3 +78,9 @@ VAE encode、latent処理、decodeは、公開V4では`POST /v4/image-edits`の�
 3. campaign一覧を`image batch list`、job作成を`image job submit`へ配線する。
 4. VAE到達性、model-profile表示、help、文書を整合させる。
 5. focused contract testsの後、CLI全体テストと標準static checksを実施する。
+
+## 検証結果
+
+`docs/reviews/2026-09-11-cli-v4-api-symmetry-validation.md`に、33件の配線集計、
+66 help path、CLI完全テスト、標準static checks、API側のprofile表示とVAE経路の
+focused validationを記録した。デプロイ済みStagingへの反映とlive smokeは別作業である。

@@ -193,12 +193,12 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
     if args.command in {"plan", "batch"}:
         request = load_json_object(args.request)
         token = service.access_token(frozenset({"images:edit"}))
-        result = (
+        contract_result = (
             api.plan_image_operations(token, request=request)
             if args.command == "plan"
             else api.run_image_operation_batch(token, request=request)
         )
-        print(json.dumps(result, indent=2, sort_keys=True))
+        print(json.dumps(contract_result, indent=2, sort_keys=True))
         return
     if args.command == "composite":
         composited = api.composite_image(
@@ -276,7 +276,7 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
         run_segment(args, service, api)
         return
     if args.command == "inpaint":
-        result = api.inpaint(
+        inpainted = api.inpaint(
             service.access_token(frozenset({"images:edit"})),
             input_path=args.input,
             mask_path=args.mask,
@@ -285,11 +285,11 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
             profile=args.profile,
             safety_filter=args.safety_filter,
         )
-        save_bytes_exclusive(result.data, args.output)
-        print(f"Saved {result.width}x{result.height} image to {args.output}.")
+        save_bytes_exclusive(inpainted.data, args.output)
+        print(f"Saved {inpainted.width}x{inpainted.height} image to {args.output}.")
         return
     if args.command in {"upscale", "restore"}:
-        result = api.enhance(
+        enhanced = api.enhance(
             service.access_token(frozenset({"images:edit"})),
             input_path=args.input,
             operation=args.command,
@@ -297,8 +297,8 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
             width=getattr(args, "width", None),
             height=getattr(args, "height", None),
         )
-        save_bytes_exclusive(result.data, args.output)
-        print(f"Saved {result.width}x{result.height} enhanced image to {args.output}.")
+        save_bytes_exclusive(enhanced.data, args.output)
+        print(f"Saved {enhanced.width}x{enhanced.height} enhanced image to {args.output}.")
         return
     if args.capture_input and args.input is None:
         raise CliError("--capture-input requires a local input image")
@@ -327,11 +327,11 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
             token, input_path, namespace=args.capture_namespace, kind="image"
         )["artifact_id"]
         input_path = None
-    result = api.image_to_image(
+    image = api.image_to_image(
         token, options=options, input_path=input_path, artifact_id=artifact_id
     )
-    save_bytes_exclusive(result.data, args.output)
-    print(f"Saved {result.width}x{result.height} image to {args.output}.")
+    save_bytes_exclusive(image.data, args.output)
+    print(f"Saved {image.width}x{image.height} image to {args.output}.")
 
 
 def raster_program(args: argparse.Namespace) -> dict[str, Any]:
