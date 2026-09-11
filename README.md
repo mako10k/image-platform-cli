@@ -82,7 +82,7 @@ speed or image-quality improvement. A light composition-preserving example is:
 
 ```bash
 image edit image-to-image "watercolor coastal cottage" --input sketch.png -o watercolor.png \
-  --width 256 --height 256 --steps 10 --strength 0.6 --guidance-scale 7.5 --seed 17
+  --seed 17
 ```
 
 
@@ -186,3 +186,23 @@ Contributions require Developer Certificate of Origin 1.1 sign-off; see
 This software license does not grant rights to platform service marks, models,
 weights, fonts, user inputs, generated outputs, or other external assets. Those
 remain governed by their applicable terms and recorded provenance.
+
+### Server-owned model guidance
+
+`image model-profiles --details` retrieves plain text guidance for registered profiles.
+Select an exact profile with `--profile`, and add `--json` to retain its text and revision:
+
+```bash
+image model-profiles --profile i2i-ip-adapter-plus-sd15 --details
+image model-profiles --profile i2i-ip-adapter-plus-sd15 --details --json
+```
+
+The text describes valid inputs, defaults, suggested starting conditions, limitations and recovery.
+It is printed without Markdown rendering or automatic parameter selection. `image --help` and
+`image help` remain offline and link to this authenticated server read. An older server, missing
+text or unknown profile produces an explicit error; offline examples are syntax illustrations,
+not current quality recommendations. Server guidance is not persistently cached.
+
+Generation currently uses one registered FLUX.2-klein-4B profile. Ordinary i2i accepts one SD1.5
+profile even though `--profile` exists. Guided Job JSON selects registered task profiles, not an
+arbitrary base model. The guidance filter `--profile` selects documentation, not an execution model.

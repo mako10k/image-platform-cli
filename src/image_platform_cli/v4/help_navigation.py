@@ -28,7 +28,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Inspect advertised API capabilities; availability is server-specific.",
         "capabilities --json",
     ),
-    "model-profiles": ("Inspect registry-backed model profiles.", "model-profiles --json"),
+    "model-profiles": (
+        "Inspect registered profiles. Use --details for server-owned plain text guidance; --profile selects one ID.",
+        "model-profiles --json",
+    ),
     "prompt": ("Prepare a prompt through the native prompt planner.", "help prompt optimize"),
     "prompt optimize": (
         "Print an optimized prompt; --json includes the validated plan.",
@@ -44,7 +47,7 @@ TOPICS: dict[str, tuple[str, str]] = {
     ),
     "edit image-to-image": (
         "Describe the desired final image, not an editing instruction. Staging uses typed VAE encode, latent denoise and decode internally; there are no public VAE-stage or optimizer switches.",
-        'edit image-to-image "watercolor coastal cottage" --input sketch.png -o watercolor.png --seed 17 --steps 10 --width 256 --height 256',
+        'edit image-to-image "watercolor coastal cottage" --input sketch.png -o watercolor.png --seed 17',
     ),
     "edit inpaint": (
         "Repaint white mask pixels; preserve black pixels. Safety overrides require server permission.",
@@ -236,6 +239,17 @@ TOPICS: dict[str, tuple[str, str]] = {
 # These are discoverable help pages rather than executable subcommands. They document
 # profiles carried inside the generic V4 Job request without widening the CLI surface.
 GUIDES: dict[str, Guide] = {
+    "model-profiles usage": Guide(
+        guidance="Read current model guidance from the server, as plain text or JSON.",
+        example="model-profiles --profile i2i-ip-adapter-plus-sd15 --details",
+        details=(
+            "HELP itself is offline. --details requires authentication and a server supporting "
+            "usage guidance. The text describes inputs, defaults versus recommended settings, "
+            "examples, model selection limits and recovery. The CLI does not interpret or apply it.\n"
+            "Use --details --json to retain the text with its profile ID and revision. "
+            "Missing guidance or unsupported servers are reported, not replaced by guessed advice."
+        ),
+    ),
     "job submit guided-edit": Guide(
         guidance=(
             "Choose a guided image profile by the evidence you can supply. Canny ControlNet "
@@ -364,7 +378,7 @@ GUIDES: dict[str, Guide] = {
         ),
     ),
     "job submit recovery": Guide(
-        guidance="Recover from local request, authorization, artifact, policy, and dispatch errors.",
+        guidance="Recover from local request, authorization, artifact, policy, and dispatch errors. For model-specific settings use image model-profiles --details.",
         example="help job submit guided-edit",
         details=(
             "could not read JSON request: validate that --request names a readable UTF-8 JSON object.\n"
@@ -390,6 +404,22 @@ GUIDES: dict[str, Guide] = {
             "replacement. Continue with image help job submit guided-edit."
         ),
     ),
+}
+
+
+PROFILE_TOPICS = {
+    "generate": "generation-standard",
+    "prompt optimize": "prompt-optimizer-qwen2.5-3b",
+    "caption": "vision-caption-standard",
+    "edit image-to-image": "i2i-stable-diffusion-v1-5",
+    "edit inpaint": "inpaint-stable-diffusion-v1-5",
+    "edit segment": "segment-grounding-dino-sam2-tiny",
+    "edit matte-portrait": "portrait-matting-birefnet-v1",
+    "edit upscale": "upscale-realesrgan-x4plus",
+    "edit restore": "upscale-realesrgan-x4plus",
+    "search": "embedding-multimodal-siglip2",
+    "job submit controlnet-canny": "i2i-controlnet-canny-sd15",
+    "job submit ip-adapter-plus": "i2i-ip-adapter-plus-sd15",
 }
 
 
@@ -451,6 +481,13 @@ def show_help(root: argparse.ArgumentParser, topic: Sequence[str]) -> int:
     ]
     if guide is not None:
         sections.append("DETAILS\n" + guide.details)
+    if key in PROFILE_TOPICS:
+        sections.append(
+            "SERVER GUIDANCE (requires authentication)\n  image model-profiles --profile "
+            + PROFILE_TOPICS[key]
+            + " --details\n"
+            "Examples above illustrate syntax. Read current server guidance before choosing settings."
+        )
     entries = children(selected) if selected_depth == len(topic) else {}
     navigable = tuple(sorted(set(entries) | set(guide_children(key))))
     if navigable:

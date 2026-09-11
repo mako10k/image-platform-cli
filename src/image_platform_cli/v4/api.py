@@ -381,8 +381,23 @@ class V4ApiClient:
         _validate_capability_list(data)
         return data
 
-    def model_profiles(self, access_token: str) -> dict[str, Any]:
-        return self._object(self._request("GET", "/v4/model-profiles", access_token))
+    def model_profiles(self, access_token: str, *, details: bool = False) -> dict[str, Any]:
+        data = self._object(
+            self._request(
+                "GET",
+                "/v4/model-profiles",
+                access_token,
+                params={"view": "usage"} if details else None,
+            )
+        )
+        if details and "schema_id" not in data:
+            raise ApiError(
+                "server does not support profile guidance; use image model-profiles --json "
+                "or image help model-profiles"
+            )
+        if details and data["schema_id"] != "model-profile-usage.v1":
+            raise ApiError("unsupported profile guidance schema; update the CLI")
+        return data
 
     def optimize_prompt(
         self,

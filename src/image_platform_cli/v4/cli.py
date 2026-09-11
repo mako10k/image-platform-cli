@@ -19,6 +19,7 @@ from ..common.tokens import TokenValidator
 from .api import QueryScalar, V4ApiClient
 from .edit_cli import add_edit_commands, load_json_object, raster_program, run_edit
 from .help_navigation import GUIDES, TOPICS, show_help
+from .profile_guidance import show_profiles
 from .program_cli import prepare_cli_program
 from .segment_cli import validate_segment_outputs
 
@@ -59,6 +60,10 @@ def parser() -> argparse.ArgumentParser:
     capabilities.add_argument("--json", action="store_true")
     profiles = groups.add_parser("model-profiles")
     profiles.add_argument("--json", action="store_true")
+    profiles.add_argument("--profile", help="Select an exact registered profile ID.")
+    profiles.add_argument(
+        "--details", action="store_true", help="Fetch server-owned plain text usage guidance."
+    )
     prompt = groups.add_parser("prompt")
     prompts = prompt.add_subparsers(dest="command", required=True)
     optimize = prompts.add_parser("optimize")
@@ -198,13 +203,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 KeyringCredentialStore(),
             )
             api = V4ApiClient(http, config.api_base_url)
-            if args.group in {"capabilities", "model-profiles"}:
+            if args.group == "model-profiles":
                 token = service.access_token(frozenset())
-                result = (
-                    api.capabilities(token)
-                    if args.group == "capabilities"
-                    else api.model_profiles(token)
+                result = api.model_profiles(token, details=args.details)
+                show_profiles(
+                    result, profile_id=args.profile, details=args.details, as_json=args.json
                 )
+            elif args.group == "capabilities":
+                result = api.capabilities(service.access_token(frozenset()))
                 print(
                     json.dumps(result, indent=2, sort_keys=True)
                     if args.json

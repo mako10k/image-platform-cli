@@ -9007,28 +9007,144 @@
               ],
               "title": "V4ModelProfileItem",
               "type": "object"
-            }
-          },
-          "additionalProperties": false,
-          "properties": {
-            "revision": {
-              "title": "Revision",
-              "type": "string"
             },
-            "items": {
-              "items": {
-                "$ref": "#/$defs/V4ModelProfileItem"
+            "V4ModelProfileList": {
+              "additionalProperties": false,
+              "properties": {
+                "revision": {
+                  "title": "Revision",
+                  "type": "string"
+                },
+                "items": {
+                  "items": {
+                    "$ref": "#/$defs/V4ModelProfileItem"
+                  },
+                  "title": "Items",
+                  "type": "array"
+                }
               },
-              "title": "Items",
-              "type": "array"
+              "required": [
+                "revision",
+                "items"
+              ],
+              "title": "V4ModelProfileList",
+              "type": "object"
+            },
+            "V4ModelProfileUsageItem": {
+              "additionalProperties": true,
+              "properties": {
+                "id": {
+                  "title": "Id",
+                  "type": "string"
+                },
+                "operation": {
+                  "$ref": "#/$defs/Operation"
+                },
+                "model_semantics": {
+                  "const": "platform-profile",
+                  "default": "platform-profile",
+                  "title": "Model Semantics",
+                  "type": "string"
+                },
+                "availability_domain": {
+                  "enum": [
+                    "v4_callable",
+                    "platform_only"
+                  ],
+                  "title": "Availability Domain",
+                  "type": "string"
+                },
+                "bindings": {
+                  "items": {
+                    "$ref": "#/$defs/V4ModelProfileBinding"
+                  },
+                  "title": "Bindings",
+                  "type": "array"
+                },
+                "guidance": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/V4ProfileGuidance"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "operation",
+                "availability_domain",
+                "bindings",
+                "guidance"
+              ],
+              "title": "V4ModelProfileUsageItem",
+              "type": "object"
+            },
+            "V4ModelProfileUsageList": {
+              "additionalProperties": true,
+              "properties": {
+                "schema_id": {
+                  "default": "model-profile-usage.v1",
+                  "title": "Schema Id",
+                  "type": "string"
+                },
+                "registry_revision": {
+                  "title": "Registry Revision",
+                  "type": "string"
+                },
+                "guidance_revision": {
+                  "title": "Guidance Revision",
+                  "type": "string"
+                },
+                "items": {
+                  "items": {
+                    "$ref": "#/$defs/V4ModelProfileUsageItem"
+                  },
+                  "title": "Items",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "registry_revision",
+                "guidance_revision",
+                "items"
+              ],
+              "title": "V4ModelProfileUsageList",
+              "type": "object"
+            },
+            "V4ProfileGuidance": {
+              "additionalProperties": true,
+              "description": "Opaque plain text; its section structure is not a public contract.",
+              "properties": {
+                "language": {
+                  "title": "Language",
+                  "type": "string"
+                },
+                "content": {
+                  "title": "Content",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "language",
+                "content"
+              ],
+              "title": "V4ProfileGuidance",
+              "type": "object"
             }
           },
-          "required": [
-            "revision",
-            "items"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/V4ModelProfileList"
+            },
+            {
+              "$ref": "#/$defs/V4ModelProfileUsageList"
+            }
           ],
-          "title": "V4ModelProfileList",
-          "type": "object"
+          "description": "Keep the summary wire shape while documenting the opt-in usage representation.",
+          "title": "V4ModelProfileResponse"
         }
       }
     },
@@ -9083,6 +9199,14 @@
         "message": "native operation failed",
         "retryable": false,
         "param_allowed": false,
+        "header_names": []
+      },
+      "invalid_request": {
+        "code": "invalid_request",
+        "status_code": 422,
+        "message": "request is invalid",
+        "retryable": false,
+        "param_allowed": true,
         "header_names": []
       }
     }
