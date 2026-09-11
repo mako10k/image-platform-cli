@@ -18,7 +18,7 @@ from ..common.service import AuthService
 from ..common.tokens import TokenValidator
 from .api import QueryScalar, V4ApiClient
 from .edit_cli import add_edit_commands, load_json_object, raster_program, run_edit
-from .help_navigation import show_help
+from .help_navigation import GUIDES, TOPICS, show_help
 from .program_cli import prepare_cli_program
 from .segment_cli import validate_segment_outputs
 
@@ -275,6 +275,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     except CliError as error:
         print(f"error: {error}", file=sys.stderr)
+        if help_topic := _error_help_topic(args):
+            print(f"help: Run `image help {help_topic}` for recovery guidance.", file=sys.stderr)
         return 2
 
 
@@ -285,6 +287,27 @@ def _announce(user_code: str, verification_uri_complete: str) -> None:
 
 def _show_help(topic: Sequence[str]) -> int:
     return show_help(parser(), topic)
+
+
+def _error_help_topic(args: argparse.Namespace) -> str | None:
+    group = getattr(args, "group", None)
+    command = getattr(args, "command", None)
+    if (group, command) == ("job", "submit"):
+        return "job submit recovery"
+    if (group, command) == ("artifact", "upload"):
+        return "artifact upload recovery"
+    candidates = tuple(
+        candidate
+        for candidate in (
+            " ".join(value for value in (group, command) if isinstance(value, str)),
+            group,
+        )
+        if isinstance(candidate, str) and candidate
+    )
+    return next(
+        (candidate for candidate in candidates if candidate in TOPICS or candidate in GUIDES),
+        None,
+    )
 
 
 def _summary(group: str, result: dict[str, object]) -> str:

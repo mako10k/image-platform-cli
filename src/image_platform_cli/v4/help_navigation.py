@@ -3,6 +3,15 @@
 import argparse
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class Guide:
+    guidance: str
+    example: str
+    details: str
+
 
 # Examples are parsed by tests, never executed. Replace local paths and server IDs.
 TOPICS: dict[str, tuple[str, str]] = {
@@ -155,7 +164,7 @@ TOPICS: dict[str, tuple[str, str]] = {
         "job list --status running --limit 10",
     ),
     "job submit": (
-        "Submit a complete Native API V4 Pipeline request with durable Job policy.",
+        "Submit a complete Native API V4 Pipeline request with durable Job policy. Browse the help-only topics below for guided image profiles and recovery.",
         "job submit --request job-request.json",
     ),
     "job show": ("Show one job's current state.", "job show JOB_ID"),
@@ -224,6 +233,166 @@ TOPICS: dict[str, tuple[str, str]] = {
 }
 
 
+# These are discoverable help pages rather than executable subcommands. They document
+# profiles carried inside the generic V4 Job request without widening the CLI surface.
+GUIDES: dict[str, Guide] = {
+    "job submit guided-edit": Guide(
+        guidance=(
+            "Choose a guided image profile by the evidence you can supply. Canny ControlNet "
+            "follows edges from a target control image. IP-Adapter Plus uses one or more "
+            "reference images to guide appearance. The current profiles cannot combine both "
+            "controls in one Job."
+        ),
+        example="help job submit controlnet-canny",
+        details=(
+            "For target structure or pose represented by visible edges:\n"
+            "  image help job submit controlnet-canny\n"
+            "For subject appearance, clothing, or style references:\n"
+            "  image help job submit ip-adapter-plus\n"
+            "For request rejection, missing access, or invalid artifacts:\n"
+            "  image help job submit recovery"
+        ),
+    ),
+    "job submit controlnet-canny": Guide(
+        guidance=(
+            "Run the registered Canny ControlNet profile with a source image and a separate "
+            "control image. The control image must already depict the target edge structure; "
+            "this profile does not derive a requested human pose from prose and does not "
+            "guarantee subject identity."
+        ),
+        example="job submit --request controlnet-job.json",
+        details=(
+            "1. Upload both inputs and retain the returned artifact_id values:\n"
+            "  image artifact upload person.png --kind image --namespace guided-edit\n"
+            "  image artifact upload bowing-control.png --kind image --namespace guided-edit\n"
+            "2. Save this as controlnet-job.json after replacing both artifact IDs and the UUID:\n"
+            "{\n"
+            '  "request_id": "00000000-0000-4000-8000-000000000001",\n'
+            '  "pipeline": {\n'
+            '    "inputs": {\n'
+            '      "image": {"artifact_id": "art_SOURCE_REPLACE_ME"},\n'
+            '      "control": {"artifact_id": "art_CONTROL_REPLACE_ME"}\n'
+            "    },\n"
+            '    "steps": [{\n'
+            '      "id": "edit",\n'
+            '      "op": "edit",\n'
+            '      "inputs": {\n'
+            '        "image": {"artifact_id": "art_SOURCE_REPLACE_ME"},\n'
+            '        "control": {"artifact_id": "art_CONTROL_REPLACE_ME"}\n'
+            "      },\n"
+            '      "params": {\n'
+            '        "profile": "i2i-controlnet-canny-sd15",\n'
+            '        "prompt": "the same person bowing politely",\n'
+            '        "negative_prompt": null,\n'
+            '        "strength": "0.75",\n'
+            '        "guidance_scale": "7.5",\n'
+            '        "inference_steps": 25,\n'
+            '        "seed": 7,\n'
+            '        "width": null,\n'
+            '        "height": null,\n'
+            '        "control_scale": "0.8",\n'
+            '        "control_start": "0",\n'
+            '        "control_end": "1"\n'
+            "      }\n"
+            "    }],\n"
+            '    "outputs": [{"step_id": "edit", "output": "image"}]\n'
+            "  },\n"
+            '  "policy": {\n'
+            '    "max_cost_usd": "0.25",\n'
+            '    "deadline_seconds": 300,\n'
+            '    "result_mode": "atomic"\n'
+            "  }\n"
+            "}\n"
+            "3. Submit and inspect the returned Job ID:\n"
+            "  image job submit --request controlnet-job.json\n"
+            "  image job show JOB_ID"
+        ),
+    ),
+    "job submit ip-adapter-plus": Guide(
+        guidance=(
+            "Run the registered IP-Adapter Plus profile when reference appearance matters. "
+            "Supply a source image plus one or more reference images. This profile does not "
+            "provide explicit pose control and cannot be combined with Canny ControlNet in "
+            "the current public Job shape."
+        ),
+        example="job submit --request ip-adapter-job.json",
+        details=(
+            "1. Upload the source and one to four reference images and retain their artifact IDs.\n"
+            "2. Save this as ip-adapter-job.json after replacing the IDs and UUID:\n"
+            "{\n"
+            '  "request_id": "00000000-0000-4000-8000-000000000001",\n'
+            '  "pipeline": {\n'
+            '    "inputs": {\n'
+            '      "image": {"artifact_id": "art_SOURCE_REPLACE_ME"},\n'
+            '      "reference_1": {"artifact_id": "art_REFERENCE_REPLACE_ME"}\n'
+            "    },\n"
+            '    "steps": [{\n'
+            '      "id": "edit",\n'
+            '      "op": "edit",\n'
+            '      "inputs": {\n'
+            '        "image": {"artifact_id": "art_SOURCE_REPLACE_ME"},\n'
+            '        "reference_1": {"artifact_id": "art_REFERENCE_REPLACE_ME"}\n'
+            "      },\n"
+            '      "params": {\n'
+            '        "profile": "i2i-ip-adapter-plus-sd15",\n'
+            '        "prompt": "the same person bowing politely",\n'
+            '        "negative_prompt": null,\n'
+            '        "strength": "0.75",\n'
+            '        "guidance_scale": "7.5",\n'
+            '        "inference_steps": 25,\n'
+            '        "seed": 7,\n'
+            '        "width": null,\n'
+            '        "height": null,\n'
+            '        "reference_count": 1,\n'
+            '        "reference_scale": "0.6"\n'
+            "      }\n"
+            "    }],\n"
+            '    "outputs": [{"step_id": "edit", "output": "image"}]\n'
+            "  },\n"
+            '  "policy": {\n'
+            '    "max_cost_usd": "0.25",\n'
+            '    "deadline_seconds": 300,\n'
+            '    "result_mode": "atomic"\n'
+            "  }\n"
+            "}\n"
+            "For more references, add contiguous reference_2 through reference_4 entries to "
+            "both input maps and set reference_count to the same total. reference_scale accepts "
+            "0.1 through 1.\n"
+            "3. Submit and inspect the returned Job ID:\n"
+            "  image job submit --request ip-adapter-job.json\n"
+            "  image job show JOB_ID"
+        ),
+    ),
+    "job submit recovery": Guide(
+        guidance="Recover from local request, authorization, artifact, policy, and dispatch errors.",
+        example="help job submit guided-edit",
+        details=(
+            "could not read JSON request: validate that --request names a readable UTF-8 JSON object.\n"
+            "insufficient_scope: run image auth login with jobs:submit and the artifact scopes "
+            "needed by the workflow.\n"
+            "artifact_unavailable: confirm every artifact ID with image artifact show ARTIFACT_ID.\n"
+            "image_edit_not_permitted: the authenticated principal is not allowlisted for durable "
+            "image editing; this requires server-side configuration.\n"
+            "job_policy_rejected: compare the request with the exact profile guide; registered "
+            "guided edits require one step, exact inputs and parameters, one image output, and "
+            "atomic result mode.\n"
+            "job_dispatch_unavailable: retry only after the server Retry-After interval. Reuse the "
+            "same request file so request_id preserves idempotency."
+        ),
+    ),
+    "artifact upload recovery": Guide(
+        guidance="Recover an Artifact upload before submitting a guided image Job.",
+        example="artifact upload scene.png --kind image --namespace guided-edit",
+        details=(
+            "Confirm the file exists and is a supported image, renew authentication with "
+            "artifacts:write when scope is missing, and rerun the upload once. If upload "
+            "completion is ambiguous, inspect the returned artifact ID before creating a "
+            "replacement. Continue with image help job submit guided-edit."
+        ),
+    ),
+}
+
+
 def children(command: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
     return {
         name: child
@@ -233,29 +402,60 @@ def children(command: argparse.ArgumentParser) -> dict[str, argparse.ArgumentPar
     }
 
 
+def guide_children(key: str) -> tuple[str, ...]:
+    prefix = f"{key} " if key else ""
+    return tuple(
+        sorted(
+            {
+                candidate.removeprefix(prefix).split(" ", 1)[0]
+                for candidate in GUIDES
+                if candidate.startswith(prefix) and candidate != key
+            }
+        )
+    )
+
+
 def show_help(root: argparse.ArgumentParser, topic: Sequence[str]) -> int:
     selected = root
+    selected_depth = 0
     for index, name in enumerate(topic):
         available = children(selected)
         if name not in available:
+            requested_key = " ".join(topic).replace("edit i2i", "edit image-to-image", 1)
+            if requested_key in GUIDES:
+                break
+            current_key = " ".join(topic[:index]).replace("edit i2i", "edit image-to-image", 1)
+            navigable = tuple(sorted(set(available) | set(guide_children(current_key))))
             print(
                 f"error: unknown help topic {' '.join(topic[: index + 1])}; "
-                f"available: {', '.join(available) or 'none'}",
+                f"available: {', '.join(navigable) or 'none'}",
                 file=sys.stderr,
             )
             return 2
         selected = available[name]
+        selected_depth = index + 1
     key = " ".join(topic).replace("edit i2i", "edit image-to-image", 1)
-    guidance, example = TOPICS.get(key, ("Inspect the available options.", f"help {key}"))
+    guide = GUIDES.get(key)
+    guidance, example = (
+        (guide.guidance, guide.example)
+        if guide is not None
+        else TOPICS.get(key, ("Inspect the available options.", f"help {key}"))
+    )
+    heading = selected.format_help().rstrip()
+    if selected_depth < len(topic):
+        heading = f"usage: image help {key}\n\nHelp topic: {key}"
     sections = [
-        selected.format_help().rstrip(),
+        heading,
         f"GUIDANCE\n{guidance}",
         "EXAMPLES (replace paths and IDs as needed)\n  image " + example,
     ]
-    entries = children(selected)
-    if entries:
+    if guide is not None:
+        sections.append("DETAILS\n" + guide.details)
+    entries = children(selected) if selected_depth == len(topic) else {}
+    navigable = tuple(sorted(set(entries) | set(guide_children(key))))
+    if navigable:
         sections.append(
-            "TOPICS\n" + "\n".join(f"  image help {' '.join((*topic, name))}" for name in entries)
+            "TOPICS\n" + "\n".join(f"  image help {' '.join((*topic, name))}" for name in navigable)
         )
     if topic:
         sections.append("RELATED\n  " + " ".join(("image", "help", *topic[:-1])))
