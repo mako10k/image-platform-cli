@@ -1,6 +1,11 @@
 # CLI / Native API V4 対称性完成要件 v1
 
-- Status: `DRAFT_FOR_FIRST_OWNER_REVIEW`
+> **撤回済み（2026-09-11）:** この候補は公開ルートの分母を25 semantic operationに
+> 狭め、未配線をenhancementだけと誤認したため、要件候補として使用しない。
+> オーナー指示と33件の公開契約による実装範囲は
+> `docs/design/cli-v4-api-symmetry-audit.v2.md`に記録する。
+
+- Status: `WITHDRAWN`
 - Date: 2026-09-11
 - Lifecycle: step 1 candidate
 - Decision authority: user
@@ -86,4 +91,3 @@ typed VAE providerを使用する。この経路を対称性の完成条件に�
 2. enhancementのCLI名称を、提案どおり`image edit upscale|restore`とするか。
 3. 独立VAEステージは、公開V4 APIが存在しない現状では今回の対象外でよいか。
 4. Lifecycle routeを`REVISE`、`REVIEW_THEN_REVISE`、`REVIEW_THEN_DECIDE`、`REVIEW`から選ぶ。
-

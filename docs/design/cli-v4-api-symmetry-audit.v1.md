@@ -1,5 +1,9 @@
 # CLI / Native API V4 対称性監査 v1
 
+> **撤回済み（2026-09-11）:** この監査は25 semantic operationを分母にしたため、
+> 33件ある公開V4 method/path契約の未配線を過少報告した。実装判断には使用せず、
+> `cli-v4-api-symmetry-audit.v2.md`を参照する。
+
 - 日付: 2026-09-11
 - 性質: 非規範の実装監査
 - API要件: image repository `docs/requirements/native-api-v4-interface-alignment.r3.md`
@@ -56,4 +60,3 @@ V4要件の25 semantic operationと、そのCLI dispositionで判定する。
 2. 決定したCLIを`POST /v4/enhancements`へ接続する。
 3. private-only profileを`image.edit`でcallableと表示するAPI discoveryを修正する。
 4. 対称性表、CLI help、fake-server contract testを更新する。
-

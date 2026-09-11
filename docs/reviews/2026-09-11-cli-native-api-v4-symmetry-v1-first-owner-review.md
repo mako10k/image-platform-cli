@@ -1,5 +1,8 @@
 # CLI / Native API V4 対称性完成要件 v1 First owner review input
 
+> **撤回済み（2026-09-11）:** 対象要件が公開V4契約を過少集計していたため、この記録は
+> 現在の実装判断または承認根拠に使用しない。
+
 - Candidate: `docs/requirements/cli-native-api-v4-symmetry-completion.v1.md`
 - Candidate SHA-256: `b4c0b62aa69526638c674eb277415489e94f66dafceaaa6b5e4f983a58107c3d`
 - Source audit: `docs/design/cli-v4-api-symmetry-audit.v1.md`
@@ -30,4 +33,3 @@ V5基盤、独立VAEステージ新設、private/provider/V1面のCLI公開、We
 
 First owner reviewで選ばれたrouteに従う。`REVIEW_THEN_REVISE`はレビュー後step 1へ戻り、
 `REVIEW_THEN_DECIDE`または`REVIEW`はレビュー後step 4へ進む。
-

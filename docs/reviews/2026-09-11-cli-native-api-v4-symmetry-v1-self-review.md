@@ -1,5 +1,8 @@
 # CLI / Native API V4 対称性完成要件 v1 セルフレビュー
 
+> **撤回済み（2026-09-11）:** 対象要件が公開V4契約を過少集計していたため、このレビューは
+> 現在の実装判断または承認根拠に使用しない。
+
 - Candidate: `docs/requirements/cli-native-api-v4-symmetry-completion.v1.md`
 - Candidate SHA-256: `b4c0b62aa69526638c674eb277415489e94f66dafceaaa6b5e4f983a58107c3d`
 - Result: step 1 complete; first owner review required
@@ -34,4 +37,3 @@ revision 6、Accepted Native API V4要件revision 3である。現在のコー�
 独立レビューでは、切替条件と対称性完成条件が混同されていないこと、25-operation dispositionを
 拡大・縮小していないこと、enhancement名称案のtradeoff、VAE公開境界、discovery truthfulness、
 および完成条件の検証可能性を確認する。
-
