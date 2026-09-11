@@ -74,6 +74,24 @@ def test_job_submit_advertises_guided_profile_and_recovery_topics(capsys: Any) -
         assert f"image help job submit {child}" in rendered
 
 
+@pytest.mark.parametrize(
+    ("argv", "destination"),
+    (
+        (("--help",), "image help"),
+        (("job", "--help"), "image help job"),
+        (("job", "submit", "--help"), "image help job submit"),
+        (("artifact", "upload", "--help"), "image help artifact upload recovery"),
+    ),
+)
+def test_standard_argparse_help_links_to_guided_navigation(
+    argv: tuple[str, ...], destination: str, capsys: Any
+) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        parser().parse_args(argv)
+    assert stopped.value.code == 0
+    assert destination in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("topic", ("job submit controlnet-canny", "job submit ip-adapter-plus"))
 def test_guided_profile_help_contains_valid_complete_job_json(topic: str, capsys: Any) -> None:
     assert main(["help", *topic.split()]) == 0

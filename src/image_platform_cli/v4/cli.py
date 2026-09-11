@@ -41,7 +41,10 @@ DEFAULT_LOGIN_SCOPES = (
 
 
 def parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(prog="image4")
+    root = argparse.ArgumentParser(
+        prog="image4",
+        epilog="Use `image help` to browse task guidance, examples, and recovery steps.",
+    )
     groups = root.add_subparsers(dest="group", required=True)
     add_edit_commands(groups)
     help_command = groups.add_parser("help")
@@ -66,13 +69,21 @@ def parser() -> argparse.ArgumentParser:
     optimize.add_argument("--json", action="store_true")
     generate = groups.add_parser("generate")
     add_generation_arguments(generate)
-    job = groups.add_parser("job")
+    job = groups.add_parser(
+        "job", epilog="Continue with `image help job` for examples and guided workflows."
+    )
     jobs = job.add_subparsers(dest="command", required=True)
     job_list = jobs.add_parser("list")
     job_list.add_argument("--status", action="append", default=[])
     job_list.add_argument("--operation", action="append", default=[])
     _add_page_arguments(job_list)
-    job_submit = jobs.add_parser("submit")
+    job_submit = jobs.add_parser(
+        "submit",
+        epilog=(
+            "Run `image help job submit` to discover ControlNet, IP-Adapter, request, "
+            "and recovery guides."
+        ),
+    )
     job_submit.add_argument("--request", type=Path, required=True)
     for command in ("show", "cancel", "previews"):
         selected = jobs.add_parser(command)
@@ -96,7 +107,10 @@ def parser() -> argparse.ArgumentParser:
     artifact_download = artifacts.add_parser("download")
     artifact_download.add_argument("artifact_id")
     artifact_download.add_argument("--output", "-o", type=Path, required=True)
-    artifact_upload = artifacts.add_parser("upload")
+    artifact_upload = artifacts.add_parser(
+        "upload",
+        epilog="For upload recovery, run `image help artifact upload recovery`.",
+    )
     artifact_upload.add_argument("input", type=Path)
     artifact_upload.add_argument("--namespace", default="default")
     artifact_upload.add_argument("--kind", choices=("image", "mask"), default="image")
