@@ -126,6 +126,13 @@ copyable examples, child topics, and a related parent topic. Replace example pat
 digests with real values. Help is offline; commands in examples may perform API operations when run.
 The catalog reflects CLI support, while `image capabilities --json` reports server availability.
 
+Generic durable Job profiles also have help-only topics. Follow `image help job`, then
+`image help job submit`, and choose `guided-edit`, `controlnet-canny`, `ip-adapter-plus`, or
+`recovery`. The profile pages include complete request JSON while execution remains on
+`image artifact upload` and `image job submit`. Command failures print a contextual `image help`
+recovery route; the help page distinguishes Canny structure guidance from IP-Adapter appearance
+guidance and records that the current profiles cannot combine both in one Job.
+
 `image edit replace-object` and `image edit replace-background` compile common replacement
 workflows into the same deterministic program contract. They support thresholding, disk dilation
 (`--padding` is its bounding-mask convenience alias), erosion, feathering, and union,

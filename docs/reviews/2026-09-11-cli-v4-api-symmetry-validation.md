@@ -24,8 +24,10 @@
 ## API側整合性
 
 image repository commit `b8263e6`はmodel profileを広いsemantic IDではなく、実際に
-利用できるV4 route IDへ明示的に割り当てる。Flux、ControlNet、IP-Adapter profileは
-`platform_only`、typed SD1.5 image-to-image profileは`v4.image_edits.create`として表示する。
+利用できるV4 route IDへ明示的に割り当てる。その後のcommit `dbe352f`で、汎用Job routeが
+受理するControlNetとIP-Adapter profileの見落としを修正した。Fluxは`platform_only`、
+ControlNetとIP-Adapterは`v4.jobs.create`、typed SD1.5 image-to-image profileは
+`v4.image_edits.create`として表示する。
 
 Modal Staging compositionは`ModalTypedImageToImageProvider`をV4 image-edit serviceへ注入する。
 VAE Encode、latent denoise、Decodeは`POST /v4/image-edits`内部の物理処理であり、CLIは既存の
@@ -38,6 +40,8 @@ VAE Encode、latent denoise、Decodeは`POST /v4/image-edits`内部の物理処�
 - CLI完全テスト: `uv run pytest -q`、635 passed
 - CLI標準static checks: `./scripts/static-checks.sh`、Ruff、format、strict mypy、Xenon、Pylint passed
 - help navigation: rootとgroupを含む66 path、および全exampleのparseを完全テスト内で検証
+- guided Job help: 5件のhelp-only topic、完全なControlNet/IP-Adapter Job JSON、エラーからの
+  recovery導線をfocused 154 testsとAPI request parserで検証
 - API focused tests: Native V4 route/contract、model-profile projection、VAE plan、execution、types、specialized provider passed
 
 この記録はローカル実装の検証である。Modalまたはpublic Stagingへのdeploy、live request、
