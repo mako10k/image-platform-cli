@@ -40,7 +40,7 @@ route数を一致させる要求ではない。
 | 13 | `GET /v4/campaigns` | `image batch list` | 直接 | **未配線** |
 | 14 | `GET /v4/capabilities` | `image capabilities` | 直接 | 接続済み |
 | 15 | `POST /v4/captions` | `image caption` | 直接 | 接続済み |
-| 16 | `POST /v4/enhancements` | `image edit upscale`、`restore` | 直接 | **未配線** |
+| 16 | `POST /v4/enhancements` | `image edit upscale`、`restore` | 直接 | 接続済み |
 | 17 | `GET /v4/evaluation-rubrics` | `image batch iterate` | 複合 | 接続済み |
 | 18 | `POST /v4/generations` | `image generate` | 直接 | 接続済み |
 | 19 | `POST /v4/image-edits` | `image edit image-to-image` | 直接 | 接続済み |
@@ -59,7 +59,7 @@ route数を一致させる要求ではない。
 | 32 | `POST /v4/prompt-plans` | `image prompt optimize` | 直接 | 接続済み |
 | 33 | `POST /v4/segmentations` | `image edit segment` | 直接 | 接続済み |
 
-監査時点の集計は、直接または複合で接続済み28件、未配線5件である。
+現在の集計は、直接または複合で接続済み29件、未配線4件である。
 
 ## VAEとSafetyの境界
 

@@ -36,6 +36,7 @@ from .color_matching import ColorMatchOptions
 from .compositing import CompositeOptions
 from .conversion import prepare_conversion
 from .crop import crop_program
+from .enhancements import EnhancedImage, prepare_enhancement, verify_enhancement
 from .filtering import filter_program
 from .grayscale import grayscale_program
 from .image_edits import ImageToImageOptions, verified_image
@@ -317,6 +318,28 @@ class V4ApiClient:
         if not response.is_success:
             raise ApiError(_safe_error(envelope))
         return verified_image(response, self._object(envelope["data"]), payload, source)
+
+    def enhance(
+        self,
+        access_token: str,
+        *,
+        input_path: Path,
+        operation: str,
+        quality_tier: str = "deterministic",
+        width: int | None = None,
+        height: int | None = None,
+    ) -> EnhancedImage:
+        payload, source = prepare_enhancement(
+            input_path,
+            operation=operation,
+            quality_tier=quality_tier,
+            width=width,
+            height=height,
+        )
+        response, envelope = self._exchange("POST", "/v4/enhancements", access_token, json=payload)
+        if not response.is_success:
+            raise ApiError(_safe_error(envelope))
+        return verify_enhancement(response, self._object(envelope["data"]), payload, source)
 
     def capabilities(self, access_token: str) -> dict[str, Any]:
         data = self._object(self._request("GET", "/v4/capabilities", access_token))

@@ -41,6 +41,14 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Repaint white mask pixels; preserve black pixels. Safety overrides require server permission.",
         'edit inpaint "a red door" --input house.png --mask door.png --output painted.png --seed 17',
     ),
+    "edit upscale": (
+        "Enlarge an image through the V4 enhancement route; choose deterministic or AI quality.",
+        "edit upscale --input scene.png --width 2048 --height 2048 -o enlarged.png",
+    ),
+    "edit restore": (
+        "Restore an image at its original dimensions through the V4 enhancement route.",
+        "edit restore --input scene.png --quality-tier ai -o restored.png",
+    ),
     "edit segment": (
         "Select by text, box or points; provide at least one distinct output path.",
         'edit segment --input scene.png --text "house" --mask-output house-mask.png',

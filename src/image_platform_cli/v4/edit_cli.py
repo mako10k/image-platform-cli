@@ -170,6 +170,16 @@ def add_edit_commands(groups: argparse._SubParsersAction[argparse.ArgumentParser
     command.add_argument("--seed", type=int)
     command.add_argument("--width", type=int)
     command.add_argument("--height", type=int)
+    for name in ("upscale", "restore"):
+        enhancement = commands.add_parser(name)
+        enhancement.add_argument("--input", type=Path, required=True)
+        enhancement.add_argument("--output", "-o", type=Path, required=True)
+        enhancement.add_argument(
+            "--quality-tier", choices=("deterministic", "ai"), default="deterministic"
+        )
+        if name == "upscale":
+            enhancement.add_argument("--width", type=int, required=True)
+            enhancement.add_argument("--height", type=int, required=True)
 
 
 def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -> None:
@@ -263,6 +273,18 @@ def run_edit(args: argparse.Namespace, service: AuthService, api: V4ApiClient) -
         )
         save_bytes_exclusive(result.data, args.output)
         print(f"Saved {result.width}x{result.height} image to {args.output}.")
+        return
+    if args.command in {"upscale", "restore"}:
+        result = api.enhance(
+            service.access_token(frozenset({"images:edit"})),
+            input_path=args.input,
+            operation=args.command,
+            quality_tier=args.quality_tier,
+            width=getattr(args, "width", None),
+            height=getattr(args, "height", None),
+        )
+        save_bytes_exclusive(result.data, args.output)
+        print(f"Saved {result.width}x{result.height} enhanced image to {args.output}.")
         return
     if args.capture_input and args.input is None:
         raise CliError("--capture-input requires a local input image")
